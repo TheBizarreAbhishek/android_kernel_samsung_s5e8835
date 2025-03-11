@@ -1,0 +1,123 @@
+name: Build Kernel for SM-M356B with KSU Next + SuSFS
+
+on:
+  workflow_dispatch:  # Allows manual triggering of the workflow
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        device: [SM-M356B]
+
+    name: Build Kernel for ${{ matrix.device }} with KSU Next + SuSFS
+    runs-on: ubuntu-latest
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+      
+    steps:
+      - name: Cleanup Runner
+        uses: rokibhasansagar/slimhub_actions@main
+    
+      - name: Install Dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y lld binutils clang llvm zip flex bison libncurses-dev gawk libiberty-dev autoconf kmod bc build-essential gcc libc6 curl libstdc++6 git wget libssl-dev cpio p7zip-full ccache
+          sudo apt clean
+
+      - name: Checkout Kernel Source (KSU Next + SuSFS)
+        uses: actions/checkout@v4
+        with:
+          ref: Ksu-Next-with-SuSFS  
+          path: kernel-source
+
+      - name: Cache Toolchain
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: toolchain
+          key: kernel-toolchain
+
+      - name: Download Toolchain (If Cache Misses)
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git toolchain
+
+      - name: Setup Submodules
+        run: |
+          cd kernel-source
+          git submodule update --init --recursive --depth 1
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: Build-Kernel-${{ matrix.device }}-KSU-Next-SuSFS
+          save: ${{ github.event_name != 'pull_request' }}
+          max-size: 2G
+
+      - name: Build Kernel with KSU Next + SuSFS
+        working-directory: kernel-source
+        run: |
+          CLANG="$GITHUB_WORKSPACE/toolchain/bin"
+          PATH=$CLANG:$PATH
+          export PATH
+          export ARCH=arm64
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-android-
+          export KERNEL_MAKE_ENV="DTC_EXT=$(pwd)/tools/dtc CONFIG_BUILD_ARM64_DT_OVERLAY=y"
+          output_dir=out
+          date=$(date +"%Y%m%d%H%M")
+          export PATH="/usr/lib/ccache:$PATH"
+          echo "date=$date" >> $GITHUB_ENV
+          echo "Building kernel for ${{ matrix.device }} with KSU Next + SuSFS"
+          make O=out $KERNEL_MAKE_ENV CC="ccache clang" LLVM=1 LLVM_IAS=1 vendor/sm-m356b_defconfig
+          make -j$(nproc) O=out $KERNEL_MAKE_ENV CC="ccache clang" LLVM=1 LLVM_IAS=1
+
+      - name: Upload Kernel Image (KSU Next + SuSFS)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-${{ matrix.device }}-KSU-Next-SuSFS
+          path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
+
+      - name: Checkout AnyKernel
+        uses: actions/checkout@v4
+        with:
+          repository: TheBizarreAbhishek/AnyKernel3  # Ensure this is your fork
+          path: anykernel
+
+      - name: Prepare AnyKernel Zip (KSU Next + SuSFS)
+        working-directory: anykernel
+        run: |
+          cp -f $GITHUB_WORKSPACE/kernel-source/out/arch/arm64/boot/Image.gz-dtb .
+          ZIP_NAME="Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d')"
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          zip -r "$ZIP_NAME.zip" *
+          mv "$ZIP_NAME.zip" $GITHUB_WORKSPACE
+
+      - name: Generate SHA-1 Checksum (KSU Next + SuSFS)
+        run: |
+          sha1sum $ZIP_NAME.zip | awk '{print $1}' > checksum.txt
+          CHECKSUM=$(cat checksum.txt)
+
+      - name: Upload AnyKernel Zip (KSU Next + SuSFS)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: $GITHUB_WORKSPACE/*.zip
+
+      - name: Create GitHub Release (KSU Next + SuSFS)
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: ${{ github.workspace }}/checksum.txt
+          name: "Kernel Build for ${{ matrix.device }} with KSU Next + SuSFS"
+          files: |
+            ${{ env.ZIP_NAME }}.zip
+          tag_name: build-${{ github.run_number }}-${{ matrix.device }}-KSU-Next-SuSFS
+
+      - name: Delete Workflow Runs (KSU Next + SuSFS)
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 0
+          keep_minimum_runs: 1
