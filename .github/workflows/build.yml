@@ -29,7 +29,7 @@ jobs:
       - name: Checkout Kernel Source (KSU Next + SuSFS)
         uses: actions/checkout@v4
         with:
-          ref: Ksu-Next-with-SuSFS  
+          ref: main #branch
           path: kernel-source
 
       - name: Cache Toolchain
