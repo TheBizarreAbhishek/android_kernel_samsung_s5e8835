@@ -23,7 +23,9 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update -y
-          sudo apt install -y lld binutils clang llvm zip flex bison libncurses-dev gawk libiberty-dev autoconf kmod bc build-essential gcc libc6 curl libstdc++6 git wget libssl-dev cpio p7zip-full ccache
+          sudo apt install -y lld binutils clang llvm zip flex bison \
+            libncurses-dev gawk libiberty-dev autoconf kmod bc build-essential \
+            gcc libc6 curl libstdc++6 git wget libssl-dev cpio p7zip-full ccache
           sudo apt clean
 
       - name: Checkout Kernel Source (KSU Next + SuSFS)
@@ -42,37 +44,48 @@ jobs:
       - name: Download Toolchain (If Cache Misses)
         if: steps.cache-toolchain.outputs.cache-hit != 'true'
         run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git toolchain
+          git clone --branch android-9.0.0_r59 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain/aarch64-linux-android-4.9
+          git clone https://github.com/afaneh-toolchain/prebuilts_clang_host_linux-x86_clang-r383902 toolchain/clang-r383902
 
-      - name: Setup Submodules
+      - name: Setup Environment Variables
         run: |
-          cd kernel-source
-          git submodule update --init --recursive --depth 1
+          echo "Setting up environment variables..."
+          echo "ARCH=arm64" >> $GITHUB_ENV
+          echo "PLATFORM_VERSION=11" >> $GITHUB_ENV
+          echo "ANDROID_MAJOR_VERSION=r" >> $GITHUB_ENV
+          echo "CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/aarch64-linux-android-4.9/bin/aarch64-linux-android-" >> $GITHUB_ENV
+          echo "CLANG_TRIPLE=$GITHUB_WORKSPACE/toolchain/clang-r383902/bin/aarch64-linux-gnu-" >> $GITHUB_ENV
+          echo "SEC_BUILD_CONF_VENDOR_BUILD_OS=13" >> $GITHUB_ENV
+          echo "LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN=$GITHUB_WORKSPACE/toolchain/aarch64-linux-android-4.9/bin" >> $GITHUB_ENV
+          echo "CLANG_PREBUILT_BIN=$GITHUB_WORKSPACE/toolchain/clang-r383902/bin" >> $GITHUB_ENV
+          echo "LLVM=1" >> $GITHUB_ENV
+          echo "PATH=$PATH:$GITHUB_WORKSPACE/toolchain/aarch64-linux-android-4.9/bin:$GITHUB_WORKSPACE/toolchain/clang-r383902/bin" >> $GITHUB_ENV
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: Build-Kernel-${{ matrix.device }}-KSU-Next-SuSFS
-          save: ${{ github.event_name != 'pull_request' }}
-          max-size: 2G
+      - name: Select Kernel Variant
+        working-directory: kernel-source
+        run: |
+          echo "Available kernel variants:"
+          find arch/arm64/configs/ -name 'afaneh_*' | cut -d'_' -f2 | nl
+          read -p "Enter variant number: " choice
+          variant=$(find arch/arm64/configs/ -name 'afaneh_*' | sed -n "${choice}p" | cut -d'_' -f2)
+          echo "VARIANT=$variant" >> $GITHUB_ENV
+          echo "Selected variant: $variant"
+
+      - name: Clean Previous Builds
+        working-directory: kernel-source
+        run: |
+          echo "Cleaning previous build..."
+          make clean
+          make mrproper
+          rm -rf out
 
       - name: Build Kernel with KSU Next + SuSFS
         working-directory: kernel-source
         run: |
-          CLANG="$GITHUB_WORKSPACE/toolchain/bin"
-          PATH=$CLANG:$PATH
-          export PATH
-          export ARCH=arm64
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export CROSS_COMPILE=aarch64-linux-android-
-          export KERNEL_MAKE_ENV="DTC_EXT=$(pwd)/tools/dtc CONFIG_BUILD_ARM64_DT_OVERLAY=y"
-          output_dir=out
-          date=$(date +"%Y%m%d%H%M")
-          export PATH="/usr/lib/ccache:$PATH"
-          echo "date=$date" >> $GITHUB_ENV
+          mkdir -p out
           echo "Building kernel for ${{ matrix.device }} with KSU Next + SuSFS"
-          make O=out $KERNEL_MAKE_ENV CC="ccache clang" LLVM=1 LLVM_IAS=1 vendor/sm-m356b_defconfig
-          make -j$(nproc) O=out $KERNEL_MAKE_ENV CC="ccache clang" LLVM=1 LLVM_IAS=1
+          make -j$(nproc) O=out LOCALVERSION=-afaneh92 afaneh_${{ env.VARIANT }}_defconfig
+          make -j$(nproc) O=out LOCALVERSION=-afaneh92
 
       - name: Upload Kernel Image (KSU Next + SuSFS)
         uses: actions/upload-artifact@v4
@@ -83,27 +96,27 @@ jobs:
       - name: Checkout AnyKernel
         uses: actions/checkout@v4
         with:
-          repository: TheBizarreAbhishek/AnyKernel3  # Ensure this is your fork
+          repository: TheBizarreAbhishek/AnyKernel3
           path: anykernel
 
       - name: Prepare AnyKernel Zip (KSU Next + SuSFS)
         working-directory: anykernel
         run: |
           cp -f $GITHUB_WORKSPACE/kernel-source/out/arch/arm64/boot/Image.gz-dtb .
-          ZIP_NAME="Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d')"
-          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
-          zip -r "$ZIP_NAME.zip" *
-          mv "$ZIP_NAME.zip" $GITHUB_WORKSPACE
+          sed -i "s/ExampleKernel by osm0sis/${{ env.VARIANT }} kernel by afaneh92/g" anykernel.sh
+          sed -i "s/=maguro/=${{ env.VARIANT }}/g" anykernel.sh
+          zip -r "Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip" *
+          mv "Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip" $GITHUB_WORKSPACE
 
       - name: Generate SHA-1 Checksum (KSU Next + SuSFS)
         run: |
-          sha1sum $ZIP_NAME.zip | awk '{print $1}' > checksum.txt
+          sha1sum "Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip" | awk '{print $1}' > checksum.txt
           CHECKSUM=$(cat checksum.txt)
 
       - name: Upload AnyKernel Zip (KSU Next + SuSFS)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ZIP_NAME }}
+          name: Kernel_${{ matrix.device }}_KSU-Next-SuSFS
           path: $GITHUB_WORKSPACE/*.zip
 
       - name: Create GitHub Release (KSU Next + SuSFS)
@@ -113,7 +126,7 @@ jobs:
           body_path: ${{ github.workspace }}/checksum.txt
           name: "Kernel Build for ${{ matrix.device }} with KSU Next + SuSFS"
           files: |
-            ${{ env.ZIP_NAME }}.zip
+            Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip
           tag_name: build-${{ github.run_number }}-${{ matrix.device }}-KSU-Next-SuSFS
 
       - name: Delete Workflow Runs (KSU Next + SuSFS)
