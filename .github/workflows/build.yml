@@ -1,136 +1,62 @@
-name: Build Kernel for SM-M356B with KSU Next + SuSFS
+name: Kernel Build
 
 on:
-  workflow_dispatch:  # Allows manual triggering of the workflow
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        device: [SM-M356B]
-
-    name: Build Kernel for ${{ matrix.device }} with KSU Next + SuSFS
     runs-on: ubuntu-latest
-    env:
-      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_HARDLINK: "true"
-      
+
     steps:
-      - name: Cleanup Runner
-        uses: rokibhasansagar/slimhub_actions@main
-    
-      - name: Install Dependencies
-        run: |
-          sudo apt update -y
-          sudo apt install -y lld binutils clang llvm zip flex bison \
-            libncurses-dev gawk libiberty-dev autoconf kmod bc build-essential \
-            gcc libc6 curl libstdc++6 git wget libssl-dev cpio p7zip-full ccache
-          sudo apt clean
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v4
 
-      - name: Checkout Kernel Source (KSU Next + SuSFS)
-        uses: actions/checkout@v4
-        with:
-          ref: main #branch
-          path: kernel-source
+    - name: Setup Environment
+      run: |
+        sudo apt update && sudo apt install -y bc bison flex build-essential \
+          libssl-dev libncurses-dev ccache lzop zip unzip curl wget python3
 
-      - name: Cache Toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: toolchain
-          key: kernel-toolchain
+    - name: Restore Toolchain Cache
+      id: cache-clang
+      uses: actions/cache@v4
+      with:
+        path: toolchains/proton-clang
+        key: clang-${{ runner.os }}-proton-2025
+        restore-keys: |
+          clang-${{ runner.os }}-proton-
 
-      - name: Download Toolchain (If Cache Misses)
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          git clone --branch android-9.0.0_r59 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain/aarch64-linux-android-4.9
-          git clone https://github.com/afaneh-toolchain/prebuilts_clang_host_linux-x86_clang-r383902 toolchain/clang-r383902
+    - name: Download Proton Clang (if cache is missing)
+      if: steps.cache-clang.outputs.cache-hit != 'true'
+      run: |
+        wget https://github.com/kdrag0n/proton-clang/releases/latest/download/clang.tar.gz
+        mkdir -p toolchains/proton-clang
+        tar -xvf clang.tar.gz -C toolchains/proton-clang --strip-components=1
+        rm clang.tar.gz
 
-      - name: Setup Environment Variables
-        run: |
-          echo "Setting up environment variables..."
-          echo "ARCH=arm64" >> $GITHUB_ENV
-          echo "PLATFORM_VERSION=11" >> $GITHUB_ENV
-          echo "ANDROID_MAJOR_VERSION=r" >> $GITHUB_ENV
-          echo "CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/aarch64-linux-android-4.9/bin/aarch64-linux-android-" >> $GITHUB_ENV
-          echo "CLANG_TRIPLE=$GITHUB_WORKSPACE/toolchain/clang-r383902/bin/aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "SEC_BUILD_CONF_VENDOR_BUILD_OS=13" >> $GITHUB_ENV
-          echo "LINUX_GCC_CROSS_COMPILE_PREBUILTS_BIN=$GITHUB_WORKSPACE/toolchain/aarch64-linux-android-4.9/bin" >> $GITHUB_ENV
-          echo "CLANG_PREBUILT_BIN=$GITHUB_WORKSPACE/toolchain/clang-r383902/bin" >> $GITHUB_ENV
-          echo "LLVM=1" >> $GITHUB_ENV
-          echo "PATH=$PATH:$GITHUB_WORKSPACE/toolchain/aarch64-linux-android-4.9/bin:$GITHUB_WORKSPACE/toolchain/clang-r383902/bin" >> $GITHUB_ENV
+    - name: Compile Kernel
+      run: |
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+        export KBUILD_BUILD_USER="TheBizarreAbhishek"
+        export KBUILD_BUILD_HOST="GitHubActions"
+        export PATH=$GITHUB_WORKSPACE/toolchains/proton-clang/bin:$PATH
 
-      - name: Select Kernel Variant
-        working-directory: kernel-source
-        run: |
-          echo "Available kernel variants:"
-          find arch/arm64/configs/ -name 'afaneh_*' | cut -d'_' -f2 | nl
-          read -p "Enter variant number: " choice
-          variant=$(find arch/arm64/configs/ -name 'afaneh_*' | sed -n "${choice}p" | cut -d'_' -f2)
-          echo "VARIANT=$variant" >> $GITHUB_ENV
-          echo "Selected variant: $variant"
+        make O=out m35x_defconfig
+        make O=out -j$(nproc --all)
 
-      - name: Clean Previous Builds
-        working-directory: kernel-source
-        run: |
-          echo "Cleaning previous build..."
-          make clean
-          make mrproper
-          rm -rf out
+    - name: Package Kernel (AnyKernel3)
+      run: |
+        git clone --depth=1 https://github.com/TheBizarreAbhishek/AnyKernel3.git ak3
+        cp out/arch/arm64/boot/Image.gz-dtb ak3/
+        cd ak3 && zip -r9 Kernel.zip ./*
 
-      - name: Build Kernel with KSU Next + SuSFS
-        working-directory: kernel-source
-        run: |
-          mkdir -p out
-          echo "Building kernel for ${{ matrix.device }} with KSU Next + SuSFS"
-          make -j$(nproc) O=out LOCALVERSION=-afaneh92 afaneh_${{ env.VARIANT }}_defconfig
-          make -j$(nproc) O=out LOCALVERSION=-afaneh92
-
-      - name: Upload Kernel Image (KSU Next + SuSFS)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kernel-${{ matrix.device }}-KSU-Next-SuSFS
-          path: kernel-source/out/arch/arm64/boot/Image.gz-dtb
-
-      - name: Checkout AnyKernel
-        uses: actions/checkout@v4
-        with:
-          repository: TheBizarreAbhishek/AnyKernel3
-          path: anykernel
-
-      - name: Prepare AnyKernel Zip (KSU Next + SuSFS)
-        working-directory: anykernel
-        run: |
-          cp -f $GITHUB_WORKSPACE/kernel-source/out/arch/arm64/boot/Image.gz-dtb .
-          sed -i "s/ExampleKernel by osm0sis/${{ env.VARIANT }} kernel by afaneh92/g" anykernel.sh
-          sed -i "s/=maguro/=${{ env.VARIANT }}/g" anykernel.sh
-          zip -r "Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip" *
-          mv "Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip" $GITHUB_WORKSPACE
-
-      - name: Generate SHA-1 Checksum (KSU Next + SuSFS)
-        run: |
-          sha1sum "Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip" | awk '{print $1}' > checksum.txt
-          CHECKSUM=$(cat checksum.txt)
-
-      - name: Upload AnyKernel Zip (KSU Next + SuSFS)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kernel_${{ matrix.device }}_KSU-Next-SuSFS
-          path: $GITHUB_WORKSPACE/*.zip
-
-      - name: Create GitHub Release (KSU Next + SuSFS)
-        if: success()
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: ${{ github.workspace }}/checksum.txt
-          name: "Kernel Build for ${{ matrix.device }} with KSU Next + SuSFS"
-          files: |
-            Kernel_${{ matrix.device }}_KSU-Next-SuSFS_$(date +'%Y-%m-%d').zip
-          tag_name: build-${{ github.run_number }}-${{ matrix.device }}-KSU-Next-SuSFS
-
-      - name: Delete Workflow Runs (KSU Next + SuSFS)
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          retain_days: 0
-          keep_minimum_runs: 1
+    - name: Upload Kernel ZIP
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kernel-ZIP
+        path: ak3/Kernel.zip
