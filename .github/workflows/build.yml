@@ -1,10 +1,7 @@
 name: Kernel Build
 
 on:
-  push:
-    branches:
-      - main  # Change if your branch is different
-  workflow_dispatch:  # Allows manual triggering
+  workflow_dispatch:  # Only triggers manually
 
 jobs:
   build:
@@ -32,10 +29,10 @@ jobs:
     - name: Download Proton Clang (if cache is missing)
       if: steps.cache-clang.outputs.cache-hit != 'true'
       run: |
-        wget https://github.com/kdrag0n/proton-clang/releases/latest/download/clang.tar.gz
+        wget https://raw.githubusercontent.com/WeebProject/clang/main/clang-17.tar.zst
         mkdir -p toolchains/proton-clang
-        tar -xvf clang.tar.gz -C toolchains/proton-clang --strip-components=1
-        rm clang.tar.gz
+        tar --use-compress-program=unzstd -xvf clang-17.tar.zst -C toolchains/proton-clang --strip-components=1
+        rm clang-17.tar.zst
 
     - name: Compile Kernel
       run: |
@@ -47,7 +44,7 @@ jobs:
         export KBUILD_BUILD_HOST="GitHubActions"
         export PATH=$GITHUB_WORKSPACE/toolchains/proton-clang/bin:$PATH
 
-        # Enable LLVM optimizations for better performance
+        # Enable LLVM optimizations
         export LD=ld.lld
         export LLVM=1
         export LLVM_IAS=1
