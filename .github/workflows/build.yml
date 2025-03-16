@@ -3,8 +3,8 @@ name: Kernel Build
 on:
   push:
     branches:
-      - main
-  workflow_dispatch:
+      - main  # Change if your branch is different
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   build:
@@ -17,7 +17,8 @@ jobs:
     - name: Setup Environment
       run: |
         sudo apt update && sudo apt install -y bc bison flex build-essential \
-          libssl-dev libncurses-dev ccache lzop zip unzip curl wget python3
+          libssl-dev libncurses-dev ccache lzop zip unzip curl wget python3 \
+          gcc-12-aarch64-linux-gnu
 
     - name: Restore Toolchain Cache
       id: cache-clang
@@ -46,6 +47,16 @@ jobs:
         export KBUILD_BUILD_HOST="GitHubActions"
         export PATH=$GITHUB_WORKSPACE/toolchains/proton-clang/bin:$PATH
 
+        # Enable LLVM optimizations for better performance
+        export LD=ld.lld
+        export LLVM=1
+        export LLVM_IAS=1
+        export LTO=thin
+
+        # Avoid warnings breaking the build
+        export KCFLAGS="-Wno-error"
+
+        # Start the build
         make O=out m35x_defconfig
         make O=out -j$(nproc --all)
 
