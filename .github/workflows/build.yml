@@ -79,9 +79,16 @@ jobs:
           name: BizarreKernel
           path: AnyKernel3/BizarreKernel.zip
 
-      - name: Upload to GitHub Releases
-        if: github.event_name == 'release'
+      - name: Release Kernel on GitHub
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
+          name: "BizarreKernel for SM-M356B with KernelSU"
           files: AnyKernel3/BizarreKernel.zip
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: release-${{ github.run_number }}
+
+      - name: Delete Old Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 0
+          keep_minimum_runs: 1
