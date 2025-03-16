@@ -1,8 +1,15 @@
 name: Build BizarreKernel
 
 on:
-
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -21,7 +28,7 @@ jobs:
           repository: TheBizarreAbhishek/AnyKernel3
           path: AnyKernel3
 
-      - name: Install Dependencies
+      - name: Setup Environment
         run: |
           sudo apt update
           sudo apt install -y bc cpio flex bison python3 curl zip unzip libssl-dev
@@ -30,42 +37,30 @@ jobs:
         id: cache-toolchain
         uses: actions/cache@v4
         with:
-          path: ~/toolchains
+          path: |
+            ~/toolchains/aarch64-linux-android-4.9
+            ~/toolchains/clang-r383902
           key: toolchain-${{ runner.os }}
 
       - name: Clone Toolchains (if not cached)
         run: |
           mkdir -p ~/toolchains
           cd ~/toolchains
-          
-          # Clone GCC toolchain
           if [ ! -d "aarch64-linux-android-4.9" ]; then
-            echo "Cloning GCC toolchain..."
-            git clone --depth=1 --branch android-11.0.0_r48 \
-            https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+            git clone --depth=1 --branch android-11.0.0_r48 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
           fi
-          
-          # Clone Clang toolchain
           if [ ! -d "clang-r383902" ]; then
-            echo "Cloning Clang toolchain..."
-            git clone --depth=1 \
-            https://github.com/prorooter007/android_prebuilts_clang_host_linux-x86_clang-6877366 clang-r383902
+            git clone --depth=1 https://github.com/prorooter007/android_prebuilts_clang_host_linux-x86_clang-6877366 clang-r383902
           fi
 
       - name: Build Kernel
         run: |
           cd kernel
-          
-          # Set environment variables
           export ARCH=arm64
           export CROSS_COMPILE=~/toolchains/aarch64-linux-android-4.9/bin/aarch64-linux-android-
           export CLANG_TRIPLE=~/toolchains/clang-r383902/bin/aarch64-linux-gnu-
           export PATH=$PATH:~/toolchains/aarch64-linux-android-4.9/bin:~/toolchains/clang-r383902/bin
-
-          # Verify that toolchains exist
-          ls -l ~/toolchains/aarch64-linux-android-4.9/bin/
           
-          # Compile kernel
           make -j$(nproc) m35x_defconfig
           make -j$(nproc)
 
