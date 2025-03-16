@@ -1,70 +1,87 @@
-name: Kernel Build
+name: Build BizarreKernel
 
 on:
-  workflow_dispatch:  # Only triggers manually
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  release:
+    types: [created]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Kernel Source
-      uses: actions/checkout@v4
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          repository: TheBizarreAbhishek/android_kernel_samsung_s5e8835
+          path: kernel
 
-    - name: Setup Environment
-      run: |
-        sudo apt update && sudo apt install -y bc bison flex build-essential \
-          libssl-dev libncurses-dev ccache lzop zip unzip curl wget python3 \
-          gcc-12-aarch64-linux-gnu
+      - name: Checkout AnyKernel3
+        uses: actions/checkout@v4
+        with:
+          repository: TheBizarreAbhishek/AnyKernel3
+          path: AnyKernel3
 
-    - name: Restore Toolchain Cache
-      id: cache-clang
-      uses: actions/cache@v4
-      with:
-        path: toolchains/proton-clang
-        key: clang-${{ runner.os }}-proton-2025
-        restore-keys: |
-          clang-${{ runner.os }}-proton-
+      - name: Setup Environment
+        run: |
+          sudo apt update
+          sudo apt install -y bc cpio flex bison python3 curl zip unzip libssl-dev
 
-    - name: Download Proton Clang (if cache is missing)
-      if: steps.cache-clang.outputs.cache-hit != 'true'
-      run: |
-        wget https://raw.githubusercontent.com/WeebProject/clang/main/clang-17.tar.zst
-        mkdir -p toolchains/proton-clang
-        tar --use-compress-program=unzstd -xvf clang-17.tar.zst -C toolchains/proton-clang --strip-components=1
-        rm clang-17.tar.zst
+      - name: Restore Toolchain Cache
+        id: cache-toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/toolchains/aarch64-linux-android-4.9
+            ~/toolchains/clang-r383902
+          key: toolchain-${{ runner.os }}
 
-    - name: Compile Kernel
-      run: |
-        export ARCH=arm64
-        export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-        export KBUILD_BUILD_USER="TheBizarreAbhishek"
-        export KBUILD_BUILD_HOST="GitHubActions"
-        export PATH=$GITHUB_WORKSPACE/toolchains/proton-clang/bin:$PATH
+      - name: Clone Toolchains (if not cached)
+        run: |
+          mkdir -p ~/toolchains
+          cd ~/toolchains
+          if [ ! -d "aarch64-linux-android-4.9" ]; then
+            git clone --depth=1 --branch android-11.0.0_r48 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          fi
+          if [ ! -d "clang-r383902" ]; then
+            git clone --depth=1 https://github.com/prorooter007/android_prebuilts_clang_host_linux-x86_clang-6877366 clang-r383902
+          fi
 
-        # Enable LLVM optimizations
-        export LD=ld.lld
-        export LLVM=1
-        export LLVM_IAS=1
-        export LTO=thin
+      - name: Build Kernel
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export CROSS_COMPILE=~/toolchains/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+          export CLANG_TRIPLE=~/toolchains/clang-r383902/bin/aarch64-linux-gnu-
+          export PATH=$PATH:~/toolchains/aarch64-linux-android-4.9/bin:~/toolchains/clang-r383902/bin
+          
+          make -j$(nproc) m35x_defconfig
+          make -j$(nproc)
 
-        # Avoid warnings breaking the build
-        export KCFLAGS="-Wno-error"
+      - name: Package Kernel with AnyKernel3
+        run: |
+          cd kernel
+          if [ -f "arch/arm64/boot/Image" ]; then
+            cp arch/arm64/boot/Image ../AnyKernel3/zImage
+            cd ../AnyKernel3
+            zip -r9 BizarreKernel.zip . -x .git README.md *placeholder
+          fi
 
-        # Start the build
-        make O=out m35x_defconfig
-        make O=out -j$(nproc --all)
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BizarreKernel
+          path: AnyKernel3/BizarreKernel.zip
 
-    - name: Package Kernel (AnyKernel3)
-      run: |
-        git clone --depth=1 https://github.com/TheBizarreAbhishek/AnyKernel3.git ak3
-        cp out/arch/arm64/boot/Image.gz-dtb ak3/
-        cd ak3 && zip -r9 Kernel.zip ./*
-
-    - name: Upload Kernel ZIP
-      uses: actions/upload-artifact@v4
-      with:
-        name: Kernel-ZIP
-        path: ak3/Kernel.zip
+      - name: Upload to GitHub Releases
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AnyKernel3/BizarreKernel.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
