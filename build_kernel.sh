@@ -56,7 +56,7 @@ make -C "$(pwd)" mrproper
 
 # Run the make command to configure the kernel
 echo "Running kernel make process..."
-make -C "$(pwd)" O="$output_dir" $KERNEL_MAKE_ENV LLVM=1 LLVM_IAS=1 CC="ccache $CC" CLANG_TRIPLE="$CLANG_TRIPLE" vendor/m23xq_eur_open_defconfig
+make -C "$(pwd)" O="$output_dir" $KERNEL_MAKE_ENV LLVM=1 LLVM_IAS=1 CC="ccache $CC" CLANG_TRIPLE="$CLANG_TRIPLE" s5e8835-m35xxx_defconfig
 
 # Uncomment this if you need to adjust the kernel configuration manually
 # make -C "$(pwd)" O="$output_dir" $KERNEL_MAKE_ENV LLVM=1 LLVM_IAS=1 CC="ccache $CC" CLANG_TRIPLE="$CLANG_TRIPLE" menuconfig
@@ -66,7 +66,7 @@ echo "Compiling the kernel..."
 make -C "$(pwd)" O="$output_dir" $KERNEL_MAKE_ENV LLVM=1 LLVM_IAS=1 CC="ccache $CC" -j"$(nproc)" CONFIG_DEBUG_SECTION_MISMATCH=y
 
 # Check if device tree overlays (DTBO) are available, then create the DTBO image
-DTBO_DIR="$(pwd)/out/arch/arm64/boot/dts/samsung/m23/m23xq/"
+DTBO_DIR="$(pwd)/out/arch/arm64/boot/dts/samsung/m35x/"
 DTBO_FILES=$(find "$DTBO_DIR" -name "*.dtbo")
 
 if [ -n "$DTBO_FILES" ]; then
