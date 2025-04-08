@@ -1,4 +1,4 @@
-name: Build BizarreKernel for M35x
+name: Build BizarreKernel
 
 on:
   workflow_dispatch:
