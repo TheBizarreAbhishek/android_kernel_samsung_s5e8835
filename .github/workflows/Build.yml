@@ -23,6 +23,7 @@ jobs:
         run: |
           sudo apt update -y
           sudo apt-get install -y lld binutils clang llvm zip flex bison libncurses-dev gawk libiberty-dev autoconf kmod bc build-essential gcc libc6 curl libstdc++6 git wget libssl-dev cpio p7zip-full ccache
+          sudo apt-get update && sudo apt-get install -y libelf-dev
           sudo apt clean
 
       - name: Setup kernel source
