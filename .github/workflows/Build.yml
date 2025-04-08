@@ -1,0 +1,133 @@
+name: Build BizarreKernel for M35x
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Kernel For m35x
+    runs-on: ubuntu-latest
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: Cleanup
+        uses: rokibhasansagar/slimhub_actions@main
+
+      - name: Installing Dependencies
+        run: |
+          sudo apt update -y
+          sudo apt-get install -y lld binutils clang llvm zip flex bison libncurses-dev gawk libiberty-dev autoconf kmod bc build-essential gcc libc6 curl libstdc++6 git wget libssl-dev cpio p7zip-full ccache
+          sudo apt clean
+
+      - name: Setup kernel source
+        uses: actions/checkout@v4
+        with:
+          ref: main # source branch
+          path: kernel-source
+
+      - name: Add KernelSU setup.sh
+        run: |
+          cd kernel-source
+          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s next-susfs
+
+      - name: Setup submodules
+        working-directory: kernel-source
+        run: git submodule update --init --recursive --depth 0
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: Build-BizarreKernel-m35x
+          save: ${{ github.event_name != 'pull_request' }}
+          max-size: 2G
+
+      - name: Download Clang Toolchain
+        run: |
+          mkdir -p $HOME/toolchains/clang-r450784e && cd $HOME/toolchains/clang-r450784e
+          curl -LO "https://android.googlesource.com/platform//prebuilts/clang/host/linux-x86/+archive/722c840a8e4d58b5ebdab62ce78eacdafd301208/clang-r450784e.tar.gz"
+          tar -xf clang-r450784e.tar.gz && rm clang-r450784e.tar.gz
+
+      - name: Download ARM GNU Toolchain
+        run: |
+          mkdir -p $HOME/toolchains/gcc && cd $HOME/toolchains/gcc
+          curl -LO "https://developer.arm.com/-/media/Files/downloads/gnu/14.2.rel1/binrel/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz"
+          tar -xf arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu.tar.xz
+
+      - name: Checkout AnyKernel3
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          repository: TheBizarreAbhishek/AnyKernel3
+          ref: m35x
+          path: anykernel
+
+      - name: Build Kernel
+        working-directory: kernel-source
+        run: |
+          export PATH=$HOME/toolchains/clang-r450784e/bin:$PATH
+          export LD_LIBRARY_PATH=$HOME/toolchains/clang-r450784e/lib64:$LD_LIBRARY_PATH
+          export ARCH=arm64
+          export LLVM=1
+          export TARGET_SOC=s5e8835
+          export PLATFORM_VERSION=13
+          export ANDROID_MAJOR_VERSION=t
+          export DTC_FLAGS="-@"
+          export CROSS_COMPILE=$HOME/toolchains/gcc/arm-gnu-toolchain-14.2.rel1-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CC=clang
+          export PATH="/usr/lib/ccache:$PATH"
+
+          echo "Building BizarreKernel for M35x"
+          make s5e8835-m35xxx_defconfig
+          make -j$(nproc)
+
+          tools/mkdtimg create arch/arm64/boot/dtbo.img --page_size=4096 $(find arch/arm64/boot/dts/samsung/m35x/ -name "*.dtbo")
+
+      - name: Upload BizarreKernel-m35x
+        uses: actions/upload-artifact@v4
+        with:
+          name: BizarreKernel-m35x
+          path: kernel-source/arch/arm64/boot/*
+
+      - name: Prepare AnyKernel3 ZIP
+        working-directory: anykernel
+        run: |
+          cp -f $GITHUB_WORKSPACE/kernel-source/arch/arm64/boot/Image .
+          cp -f $GITHUB_WORKSPACE/kernel-source/arch/arm64/boot/dtbo.img .
+          ZIP_NAME="BizarreKernel_m35x+KSU_$(date +'%Y-%m-%d')"
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+          zip -r "$ZIP_NAME.zip" *
+          mv "$ZIP_NAME.zip" $GITHUB_WORKSPACE
+
+      - name: Generate SHA-1 checksum
+        run: |
+          sha1sum $ZIP_NAME.zip | awk '{print $1}' > checksum.txt
+          CHECKSUM=$(cat checksum.txt)
+
+      - name: Upload Flashable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}.zip
+
+      - name: Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body_path: ${{ github.workspace }}/checksum.txt
+          name: "BizarreKernel for M35x with KernelSU Next"
+          tag_name: "release-${{ github.run_number }}-m35x"
+          files: ${{ env.ZIP_NAME }}.zip
+
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 0
+          keep_minimum_runs: 1
