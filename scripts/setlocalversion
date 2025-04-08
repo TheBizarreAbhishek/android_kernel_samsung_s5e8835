@@ -191,4 +191,4 @@ sec_scm_version()
 
 res=$(sec_scm_version)
 
-echo "${res}-😈BizarreKernel😈-by-Abhishek Babu"
+echo "-😈BizarreKernel😈-by-Abhishek Babu"
