@@ -68,25 +68,6 @@ jobs:
           ref: m35x
           path: anykernel
 
-      - name: Cache mkdtimg
-        id: mkdtimg-cache
-        uses: actions/cache@v4
-        with:
-          path: tools/mkdtimg
-          key: mkdtimg-${{ runner.os }}-v1
-
-      - name: Build mkdtimg
-        if: steps.mkdtimg-cache.outputs.cache-hit != 'true'
-        run: |
-          git clone https://android.googlesource.com/platform/system/libufdt --depth=1
-          cd libufdt
-          gcc -o mkdtimg utils/src/mkdtimg.c
-          mkdir -p $GITHUB_WORKSPACE/tools/
-          cp mkdtimg $GITHUB_WORKSPACE/tools/
-
-      - name: Add tools/ to PATH
-        run: echo "$GITHUB_WORKSPACE/tools" >> $GITHUB_PATH
-
       - name: Build Kernel
         working-directory: kernel-source
         run: |
@@ -107,7 +88,7 @@ jobs:
           make s5e8835-m35xxx_defconfig
           make -j$(nproc)
 
-          mkdtimg create arch/arm64/boot/dtbo.img --page_size=4096 $(find arch/arm64/boot/dts/samsung/m35x/ -name "*.dtbo")
+          tools/mkdtimg create arch/arm64/boot/dtbo.img --page_size=4096 $(find arch/arm64/boot/dts/samsung/m35x/ -name "*.dtbo")
 
       - name: Upload BizarreKernel-m35x
         uses: actions/upload-artifact@v4
