@@ -1,0 +1,503 @@
+name: Build Kernels
+
+on:
+    workflow_dispatch:
+        inputs:
+            prerelease:
+                description: "Mark the GitHub release as a prerelease"
+                required: false
+                default: false
+                type: boolean
+            notifications:
+                description: "Telegram: post build-start and release messages"
+                required: false
+                default: false
+                type: boolean
+            kernelsu:
+                description: "KernelSU variant"
+                required: false
+                default: "ksunext"
+                type: choice
+                options:
+                    - none
+                    - ksu
+                    - ksunext
+            susfs:
+                description: "SUSFS"
+                required: false
+                default: true
+                type: boolean
+            zeromount:
+                description: "Zeromount"
+                required: false
+                default: false
+                type: boolean
+            mountify:
+                description: "Mountify (TMPFS_XATTR)"
+                required: false
+                default: true
+                type: boolean
+            ntsync:
+                description: "NTSYNC"
+                required: false
+                default: true
+                type: boolean
+            bbrv3:
+                description: "BBRv3"
+                required: false
+                default: true
+                type: boolean
+
+permissions:
+    contents: write
+    actions: write
+
+concurrency:
+    group: build-kernels-${{ github.ref }}
+    cancel-in-progress: false
+
+env:
+    TOOLCHAIN_DIR: /home/runner/toolchain/clang-r450784d
+
+defaults:
+    run:
+        shell: bash
+
+jobs:
+    notify-start:
+        name: Send Start Notification
+        runs-on: ubuntu-latest
+        if: github.event.inputs.notifications == 'true'
+        steps:
+            - name: Send Telegram Start Notification
+              run: |
+                  curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                    -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                    -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
+                    -F parse_mode="Markdown" \
+                    -F disable_web_page_preview=true \
+                    -F text="$(printf '%s\n' \
+                      '🔨 *Bizarre Kernel Build Started*' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '📦 *Variant:* \`KernelSU-Next + SUSFS\`' \
+                      '📱 *Devices:* \`Galaxy M35 + A35 (s5e8835)\`' \
+                      '🗃️ *Repo:* \`${{ github.repository }}\`' \
+                      '🔢 *Run ID:* \`${{ github.run_id }}\`' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
+
+    build:
+        name: Build Bizarre Kernel
+        needs: [notify-start]
+        if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
+        runs-on: ubuntu-latest
+        env:
+            BUILD_LOCALVERSION: -Bizarre-KSUN_SUSFS
+
+        steps:
+            - name: Free disk space
+              uses: endersonmenezes/free-disk-space@v3
+              with:
+                  remove_android: true
+                  remove_dotnet: true
+                  remove_haskell: true
+                  remove_tool_cache: true
+                  remove_swap: true
+
+            - name: Checkout Kernel Source
+              uses: actions/checkout@v4
+
+            - name: Set date and start time
+              run: |
+                  echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_ENV"
+                  echo "START_TIME=$(date +%s)" >> "$GITHUB_ENV"
+                  echo "📅 Build date: $(date +'%Y-%m-%d %H:%M:%S UTC')"
+
+            - name: Install dependencies
+              env:
+                  DEBIAN_FRONTEND: noninteractive
+              run: |
+                  echo "📦 Updating package lists..."
+                  sudo apt-get update -qq
+                  echo "📦 Installing build dependencies..."
+                  sudo apt-get install -y -qq \
+                    git device-tree-compiler lz4 xz-utils zlib1g-dev openjdk-17-jdk gcc g++ python3 python-is-python3 \
+                    p7zip-full android-sdk-libsparse-utils erofs-utils default-jdk gnupg flex bison gperf build-essential \
+                    zip curl libc6-dev libncurses-dev libx11-dev libreadline-dev libgl1 libgl1-mesa-dev bc grep tofrodos \
+                    python3-markdown libxml2-utils xsltproc libtinfo6 make repo cpio kmod openssl libelf-dev pahole \
+                    libssl-dev libarchive-tools zstd rsync --fix-missing
+                  echo "✅ All dependencies installed"
+
+            - name: Setup Clang Toolchain
+              run: |
+                  mkdir -p "${{ env.TOOLCHAIN_DIR }}"
+                  echo "⬇️  Cloning Bizarre Clang r450784d toolchain..."
+                  git clone --depth=1 https://github.com/TheBizarreAbhishek/clang-r450784d.git "${{ env.TOOLCHAIN_DIR }}"
+                  echo "${{ env.TOOLCHAIN_DIR }}/bin" >> $GITHUB_PATH
+                  echo "✅ Toolchain ready"
+
+            - name: Fetch AnyKernel3
+              run: |
+                  echo "⬇️  Cloning TheBizarreAbhishek/AnyKernel3..."
+                  git clone --depth=1 --branch bizarre https://github.com/TheBizarreAbhishek/AnyKernel3.git "$HOME/AnyKernel3"
+                  echo "✅ AnyKernel3 ready"
+
+            - name: Fetch kernel patches (WildKernels)
+              run: |
+                  echo "⬇️  Cloning WildKernels kernel patches..."
+                  git clone --depth=1 https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
+                  echo "✅ WildKernels patches ready"
+
+            - name: Import KernelSU
+              if: github.event.inputs.kernelsu != 'none'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  if [[ "${{ github.event.inputs.kernelsu }}" == "ksunext" ]]; then
+                    echo "🔧 Integrating KernelSU Next..."
+                    curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+                    echo "✅ KernelSU-Next driver ready"
+                  else
+                    echo "🔧 Integrating KernelSU (tiann)..."
+                    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+                    echo "✅ KernelSU driver ready"
+                  fi
+
+            - name: Apply SUSFS patches
+              if: github.event.inputs.susfs == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+
+                  echo "⬇️  Cloning SUSFS (gki-android13-5.15)..."
+                  git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git "$HOME/susfs4ksu"
+
+                  # Pre-process Samsung-specific hooks that conflict with SUSFS patches
+                  echo "🔧 Removing Samsung DEFEX hook from fs/open.c..."
+                  sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+
+                  echo "🔧 Removing Samsung KDP_NS conflict in fs/namespace.c..."
+                  sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
+                    /#ifdef CONFIG_KDP_NS/,/#endif/ {
+                      /#else/,/#endif/!d
+                      /#else/d
+                      /#endif/d
+                    }
+                  }' fs/namespace.c
+
+                  echo "🩹 Applying SUSFS kernel patch (allow partial)..."
+                  patch -p1 -F3 < "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" || true
+
+                  # Samsung's extra includes shift context — inject missing susfs_def.h manually
+                  echo "🔧 Injecting missing susfs_def.h includes in Samsung-modified files..."
+                  inject_susfs_include() {
+                    local f="$1" anchor="$2"
+                    if ! grep -q 'susfs_def\.h' "$f"; then
+                      echo "  → $f"
+                      sed -i "/${anchor}/i #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif" "$f" || true
+                    fi
+                  }
+                  inject_susfs_include fs/exec.c          '^#include <linux\/uaccess.h>'
+                  inject_susfs_include fs/namespace.c     '^#include "pnode.h"'
+                  inject_susfs_include fs/proc/base.c     '^#include <trace\/events\/oom.h>'
+                  inject_susfs_include fs/proc/task_mmu.c '^#include <asm\/elf.h>'
+                  inject_susfs_include fs/open.c          '^#include "internal.h"'
+
+                  # Clean up any .rej files — they are expected for Samsung-modified source
+                  find . -name '*.rej' -delete 2>/dev/null || true
+
+                  echo "🩹 Applying KernelSU SUSFS hook patch..."
+                  patch -p1 -d drivers/kernelsu < "$HOME/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+
+                  echo "📋 Copying SUSFS source files..."
+                  cp -f "$HOME/susfs4ksu/kernel_patches/fs/susfs.c" fs/
+                  cp -f "$HOME/susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
+                  cp -f "$HOME/susfs4ksu/kernel_patches/include/linux/susfs_def.h" include/linux/
+
+                  echo "✅ SUSFS patches applied"
+
+            - name: Apply Zeromount patch
+              if: github.event.inputs.zeromount == 'true'
+              run: |
+                  set -euo pipefail
+                  ZB="$HOME/Super-Builders"
+                  ZM_PATCH="$ZB/android13-5.15/WildKSU/patches/60_zeromount-android13-5.15.patch"
+
+                  echo "⬇️  Cloning Super-Builders..."
+                  rm -rf "$ZB"
+                  git clone --depth=1 https://github.com/jimsterino98/Super-Builders.git "$ZB"
+                  if [[ ! -f "$ZM_PATCH" ]]; then
+                    echo "ERROR: Zeromount patch not found: $ZM_PATCH" >&2
+                    exit 1
+                  fi
+
+                  cd "$GITHUB_WORKSPACE"
+                  echo "🩹 Applying Zeromount patch..."
+                  cp "$ZM_PATCH" ./60_zeromount-android13-5.15.patch
+                  patch -p1 < 60_zeromount-android13-5.15.patch || true
+                  rm -f 60_zeromount-android13-5.15.patch
+
+                  if [[ -f fs/proc/task_mmu.c ]] && ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
+                    echo "🔧 Fixing fs/proc/task_mmu.c..."
+                    _zm_task_mmu=$(mktemp)
+                    printf '%s\n' \
+                      '#ifdef CONFIG_ZEROMOUNT' \
+                      $'\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);' \
+                      '#endif' > "$_zm_task_mmu"
+                    sed -i "/pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;/r $_zm_task_mmu" fs/proc/task_mmu.c
+                    rm -f "$_zm_task_mmu"
+                  fi
+
+                  if [[ -f fs/Kconfig.rej ]]; then
+                    echo "🔧 Fixing fs/Kconfig..."
+                    if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
+                      perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  ZeroMount allows path redirection and virtual file injection\n\t  without mounting filesystems.\n\n@' fs/Kconfig
+                    fi
+                    rm -f fs/Kconfig.rej
+                  fi
+
+                  rm -f fs/namei.c.rej fs/readdir.c.rej fs/stat.c.rej fs/proc/task_mmu.c.rej 2>/dev/null || true
+                  echo "✅ Zeromount applied"
+
+            - name: Add NTSYNC
+              if: github.event.inputs.ntsync == 'true'
+              run: |
+                  set -euo pipefail
+                  PATCHES_DIR="$HOME/kernel_patches"
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Applying NTSYNC..."
+                  cp "$PATCHES_DIR/common/ntsync/ntsync_base.patch" .
+                  cp "$PATCHES_DIR/common/ntsync/ntsync_compat_android13-5.15.patch" .
+                  patch -p1 < ntsync_base.patch || true
+                  patch -p1 < ntsync_compat_android13-5.15.patch
+                  echo "✅ NTSYNC applied"
+
+            - name: Add BBRv3
+              if: github.event.inputs.bbrv3 == 'true'
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Applying BBRv3..."
+                  curl -L -s https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/bbr3/0001-net-tcp-backport-BBRv3-to-android13-5.15.patch | patch -p1 -F3
+                  echo "✅ BBRv3 applied"
+
+            - name: Configure build options
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+
+                  # Start fresh custom.config
+                  > arch/arm64/configs/custom.config
+
+                  echo "⚙️ Setting LOCALVERSION..."
+                  ./scripts/config --file arch/arm64/configs/custom.config \
+                    --set-str CONFIG_LOCALVERSION "${{ env.BUILD_LOCALVERSION }}" \
+                    --set-val CONFIG_LOCALVERSION_AUTO n
+
+                  if [[ "${{ github.event.inputs.kernelsu }}" != "none" ]]; then
+                    echo "⚙️ Enabling KernelSU..."
+                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU
+                  fi
+
+                  if [[ "${{ github.event.inputs.susfs }}" == "true" ]]; then
+                    echo "⚙️ Enabling SUSFS..."
+                    ./scripts/config --file arch/arm64/configs/custom.config \
+                      --enable CONFIG_KSU_SUSFS \
+                      --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT
+                  fi
+
+                  if [[ "${{ github.event.inputs.zeromount }}" == "true" ]]; then
+                    echo "⚙️ Enabling Zeromount..."
+                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
+                  fi
+
+                  if [[ "${{ github.event.inputs.mountify }}" == "true" ]]; then
+                    echo "⚙️ Enabling Mountify (TMPFS_XATTR)..."
+                    ./scripts/config --file arch/arm64/configs/custom.config \
+                      --enable CONFIG_TMPFS_XATTR \
+                      --enable CONFIG_TMPFS_POSIX_ACL
+                  fi
+
+                  if [[ "${{ github.event.inputs.ntsync }}" == "true" ]]; then
+                    echo "⚙️ Enabling NTSYNC..."
+                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
+                  fi
+
+                  if [[ "${{ github.event.inputs.bbrv3 }}" == "true" ]]; then
+                    echo "⚙️ Enabling BBRv3..."
+                    ./scripts/config --file arch/arm64/configs/custom.config \
+                      --enable CONFIG_TCP_CONG_ADVANCED \
+                      --enable CONFIG_TCP_CONG_BBR \
+                      --enable CONFIG_TCP_CONG_BBR3 \
+                      --enable CONFIG_TCP_CONG_CUBIC \
+                      --enable CONFIG_DEFAULT_CUBIC \
+                      --enable CONFIG_NET_SCH_FQ
+                  fi
+
+                  echo "✅ Build configuration ready"
+                  echo "--- custom.config ---"
+                  cat arch/arm64/configs/custom.config
+
+            - name: Build kernel
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  export PATH="${{ env.TOOLCHAIN_DIR }}/bin:$PATH"
+                  export KBUILD_BUILD_HOST="Github-Actions"
+                  export KBUILD_BUILD_USER="bizarre"
+                  export PLATFORM_VERSION=16
+                  export TARGET_SOC=s5e8835
+
+                  MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+
+                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                  echo "🏗️  Starting Bizarre Kernel build"
+                  echo "   Devices    : Galaxy M35 (m35x) + A35 (a35x)"
+                  echo "   Threads    : $(nproc --all)"
+                  echo "   Clang      : $(clang --version | head -1)"
+                  echo "   Output     : $GITHUB_WORKSPACE/out"
+                  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                  echo "⚙️  Generating .config from bizarre_defconfig + custom.config..."
+                  make $MAKE_PARAMS bizarre_defconfig custom.config
+
+                  echo ""
+                  echo "🔨 Compiling kernel..."
+                  BUILD_START=$(date +%s)
+                  make $MAKE_PARAMS
+                  BUILD_END=$(date +%s)
+                  BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
+
+                  echo ""
+                  echo "✅ Kernel compiled in $(( BUILD_ELAPSED / 60 ))m $(( BUILD_ELAPSED % 60 ))s"
+                  echo "BUILD_ELAPSED=$BUILD_ELAPSED" >> "$GITHUB_ENV"
+
+            - name: Verify kernel build
+              run: |
+                  IMAGE_PATH="$GITHUB_WORKSPACE/out/arch/arm64/boot/Image"
+                  if [[ ! -f "$IMAGE_PATH" ]]; then
+                    echo "❌ Kernel Image not found — build failed!"
+                    exit 1
+                  fi
+                  IMAGE_SIZE=$(du -sh "$IMAGE_PATH" | cut -f1)
+                  echo "✅ Kernel Image found — Size: $IMAGE_SIZE"
+                  echo "IMAGE_SIZE=$IMAGE_SIZE" >> "$GITHUB_ENV"
+
+            - name: Collect DTBOs per device
+              run: |
+                  set -euo pipefail
+                  OUT=$GITHUB_WORKSPACE/out/arch/arm64/boot
+
+                  echo "📦 Packing M35x DTBOs..."
+                  python3 scripts/ufdt/libufdt/utils/src/mkdtboimg.py create \
+                    dtbo-m35x.img \
+                    $(ls $OUT/dts/samsung/m35x/*.dtbo | sort)
+
+                  echo "📦 Packing A35x DTBOs..."
+                  python3 scripts/ufdt/libufdt/utils/src/mkdtboimg.py create \
+                    dtbo-a35x.img \
+                    $(ls $OUT/dts/samsung/a35x/*.dtbo | sort)
+
+                  echo "✅ DTBOs ready"
+
+            - name: Create flashable zip
+              run: |
+                  set -euo pipefail
+                  KERNEL_NAME_RAW="${{ env.BUILD_LOCALVERSION }}"
+                  KERNEL_NAME_RAW="${KERNEL_NAME_RAW#-}"
+                  ZIP_NAME="${KERNEL_NAME_RAW}-${{ env.DATE }}.zip"
+
+                  echo "📦 Packaging into $ZIP_NAME..."
+                  cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
+                  cp dtbo-m35x.img "$HOME/AnyKernel3/"
+                  cp dtbo-a35x.img "$HOME/AnyKernel3/"
+
+                  cd "$HOME/AnyKernel3"
+                  7z a "$ZIP_NAME" . -xr'!*.git*' | tail -1
+
+                  ZIP_SIZE=$(du -sh "$ZIP_NAME" | cut -f1)
+                  echo "✅ Zip created — Size: $ZIP_SIZE"
+                  echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+                  echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
+
+            - name: Upload kernel artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: Bizarre-Kernel-${{ env.DATE }}
+                  path: /home/runner/AnyKernel3/*.zip
+                  if-no-files-found: error
+                  retention-days: 7
+
+    publish-release:
+        name: Publish GitHub Release
+        needs: [notify-start, build]
+        runs-on: ubuntu-latest
+        if: >-
+            !cancelled()
+            && needs.build.result == 'success'
+            && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped')
+        steps:
+            - name: Set date
+              id: date
+              run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+            - name: Download kernel artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: Bizarre-Kernel-*
+                  path: /home/runner/release
+                  merge-multiple: true
+
+            - name: Publish to GitHub Releases
+              uses: softprops/action-gh-release@v2.6.1
+              with:
+                  files: /home/runner/release/*.zip
+                  name: Bizarre Kernel - ${{ steps.date.outputs.DATE }}
+                  tag_name: ${{ steps.date.outputs.DATE }}
+                  prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+                  overwrite_files: true
+                  body: |
+                      ### Bizarre Kernel for Galaxy M35 + A35 (Exynos 1380 / s5e8835)
+
+                      ### Features
+                      - KernelSU-Next: https://github.com/rifsxd/KernelSU-Next
+                      - SUSFS: https://gitlab.com/simonpunk/susfs4ksu
+                      - Unified kernel for both SM-M356B and SM-A356B
+                      - Android 16 / One UI 7
+
+                      ### Flashing Instructions
+                      1. Flash the zip via KernelSU-Next Manager or any recovery
+                      2. Device is automatically detected — correct DTBO is flashed
+                      3. Reboot
+
+                      ### Build information
+                      - **Kernel:** android13-5.15 (LTS ${{ steps.date.outputs.DATE }})
+                      - **Clang:** r450784d
+                      - **Target SoC:** Exynos 1380 (s5e8835)
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    notify-release:
+        name: Send Release Notification
+        runs-on: ubuntu-latest
+        needs: [publish-release]
+        if: github.event.inputs.notifications == 'true' && needs.publish-release.result == 'success'
+        steps:
+            - name: Set date
+              id: date
+              run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+
+            - name: Send Telegram Release Notification
+              run: |
+                  curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                    -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                    -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
+                    -F parse_mode="Markdown" \
+                    -F disable_web_page_preview=true \
+                    -F text="$(printf '%s\n' \
+                      '🎉 *New Bizarre Kernel Release*' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '🗓️ *Date:* \`${{ steps.date.outputs.DATE }}\`' \
+                      '📱 *Devices:* \`Galaxy M35 + A35 (s5e8835)\`' \
+                      '━━━━━━━━━━━━━━━━━━━━━━' \
+                      '📥 [Download from GitHub Releases](https://github.com/${{ github.repository }}/releases/tag/${{ steps.date.outputs.DATE }})')"
