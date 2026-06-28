@@ -249,6 +249,17 @@ void show_regs(struct pt_regs *regs)
 }
 EXPORT_SYMBOL_GPL(show_regs);
 
+#if IS_ENABLED(CONFIG_SEC_DEBUG_AUTO_COMMENT)
+void show_regs_auto_comment(struct pt_regs *regs, bool comm)
+{
+	__show_regs(regs);
+	if (comm)
+		dump_backtrace_auto_comment(regs, NULL);
+	else
+		dump_backtrace(regs, NULL, KERN_DEFAULT);
+}
+#endif
+
 static void tls_thread_flush(void)
 {
 	write_sysreg(0, tpidr_el0);
@@ -397,7 +408,7 @@ static void tls_thread_switch(struct task_struct *next)
 
 	if (is_compat_thread(task_thread_info(next)))
 		write_sysreg(next->thread.uw.tp_value, tpidrro_el0);
-	else if (!arm64_kernel_unmapped_at_el0())
+	else
 		write_sysreg(0, tpidrro_el0);
 
 	write_sysreg(*task_user_tls(next), tpidr_el0);

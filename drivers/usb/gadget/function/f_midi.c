@@ -282,7 +282,7 @@ f_midi_complete(struct usb_ep *ep, struct usb_request *req)
 			/* Our transmit completed. See if there's more to go.
 			 * f_midi_transmit eats req, don't queue it again. */
 			req->length = 0;
-			f_midi_transmit(midi);
+			queue_work(system_highpri_wq, &midi->work);
 			return;
 		}
 		break;
@@ -999,11 +999,11 @@ static int f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 	}
 
 	/* configure the endpoint descriptors ... */
-	ms_out_desc.bLength = USB_DT_MS_ENDPOINT_SIZE(midi->in_ports);
-	ms_out_desc.bNumEmbMIDIJack = midi->in_ports;
+	ms_out_desc.bLength = USB_DT_MS_ENDPOINT_SIZE(midi->out_ports);
+	ms_out_desc.bNumEmbMIDIJack = midi->out_ports;
 
-	ms_in_desc.bLength = USB_DT_MS_ENDPOINT_SIZE(midi->out_ports);
-	ms_in_desc.bNumEmbMIDIJack = midi->out_ports;
+	ms_in_desc.bLength = USB_DT_MS_ENDPOINT_SIZE(midi->in_ports);
+	ms_in_desc.bNumEmbMIDIJack = midi->in_ports;
 
 	/* ... and add them to the list */
 	endpoint_descriptor_index = i;
@@ -1050,11 +1050,16 @@ static int f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 
 	kfree(midi_function);
 
+	bulk_in_desc.wMaxPacketSize = 0;
+	bulk_out_desc.wMaxPacketSize = 0;
+
 	return 0;
 
 fail_f_midi:
 	kfree(midi_function);
 	usb_free_all_descriptors(f);
+	bulk_in_desc.wMaxPacketSize = 0;
+	bulk_out_desc.wMaxPacketSize = 0;
 fail:
 	f_midi_unregister_card(midi);
 fail_register:
