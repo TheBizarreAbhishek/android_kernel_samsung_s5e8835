@@ -15,7 +15,7 @@ extern struct workqueue_struct *blk_sec_common_wq;
 
 extern struct gendisk *blk_sec_internal_disk(void);
 #else
-static struct gendisk *blk_sec_internal_disk(void)
+static __maybe_unused struct gendisk *blk_sec_internal_disk(void)
 {
 	return NULL;
 }

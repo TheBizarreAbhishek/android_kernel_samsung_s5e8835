@@ -61,11 +61,11 @@ struct tasklet_log {
 	unsigned long count;
 };
 
-static DECLARE_HASHTABLE(tasklet_log_hash[CONFIG_VENDOR_NR_CPUS], BUCKET_SIZE);
+static DECLARE_HASHTABLE(tasklet_log_hash[NR_CPUS], BUCKET_SIZE);
 
-static unsigned long total_tasklet_log_count[CONFIG_VENDOR_NR_CPUS];
-static struct tasklet_log_item logs[CONFIG_VENDOR_NR_CPUS][LOG_MAX_NUM];
-static int log_item_idx[CONFIG_VENDOR_NR_CPUS];
+static unsigned long total_tasklet_log_count[NR_CPUS];
+static struct tasklet_log_item logs[NR_CPUS][LOG_MAX_NUM];
+static int log_item_idx[NR_CPUS];
 
 static void secdbg_softirq_pr_tasklet_stats(struct seq_file *dst);
 static inline void secdbg_softirq_log_tasklet(void *callback, int flag);
@@ -117,7 +117,7 @@ static void secdbg_softirq_pr_tasklet_stats(struct seq_file *dst)
 	secdbg_pr(dst, "all tasklet stats ==================\n");
 	local_irq_save(flags);
 
-	for (i = 0; i < CONFIG_VENDOR_NR_CPUS; i++)
+	for (i = 0; i < NR_CPUS; i++)
 		secdbg_softirq_pr_tasklet_stats_on_cpu(dst, i);
 
 	local_irq_restore(flags);
@@ -188,7 +188,7 @@ static void secdbg_softirq_pr_tasklet_log(struct seq_file *dst)
 	int cpu;
 
 	secdbg_pr(dst, "all tasklet log latest %d tasklets\n", NUM_OF_PRINT_ITEMS);
-	for (cpu = 0; cpu < CONFIG_VENDOR_NR_CPUS; cpu++)
+	for (cpu = 0; cpu < NR_CPUS; cpu++)
 		secdbg_softirq_pr_tasklet_log_on_cpu(dst, cpu);
 
 }
@@ -219,7 +219,7 @@ static void secdbg_softirq_init_hash(void)
 {
 	int i;
 
-	for (i = 0; i < CONFIG_VENDOR_NR_CPUS; i++)
+	for (i = 0; i < NR_CPUS; i++)
 		hash_init(tasklet_log_hash[i]);
 
 }
@@ -230,7 +230,7 @@ static void secdbg_softirq_pr_softirq_status(struct seq_file *dst)
 	int cpu;
 
 	secdbg_pr(dst, "softirq pending status ==================\n");
-	for (cpu = 0; cpu < CONFIG_VENDOR_NR_CPUS; cpu++) {
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
 		unsigned int pending;
 
 		pending = *per_cpu_ptr(&irq_stat.__softirq_pending, cpu);

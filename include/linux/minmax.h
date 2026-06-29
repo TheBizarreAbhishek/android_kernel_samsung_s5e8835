@@ -311,9 +311,17 @@ static inline bool in_range32(u32 val, u32 start, u32 len)
  * Use these carefully: no type checking, and uses the arguments
  * multiple times. Use for obvious constants only.
  */
+#ifndef MIN
 #define MIN(a, b) __cmp(min, a, b)
+#endif
+#ifndef MAX
 #define MAX(a, b) __cmp(max, a, b)
+#endif
+#ifndef MIN_T
 #define MIN_T(type, a, b) __cmp(min, (type)(a), (type)(b))
+#endif
+#ifndef MAX_T
 #define MAX_T(type, a, b) __cmp(max, (type)(a), (type)(b))
+#endif
 
 #endif	/* _LINUX_MINMAX_H */

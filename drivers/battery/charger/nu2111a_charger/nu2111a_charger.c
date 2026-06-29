@@ -35,7 +35,9 @@
 #endif
 
 #define BITS(_end, _start)		((BIT(_end) - BIT(_start)) + BIT(_end))
+#ifndef MIN
 #define MIN(a, b)				((a < b) ? (a):(b))
+#endif
 
 static int nu2111a_read_adc(struct nu2111a_charger *chg);
 

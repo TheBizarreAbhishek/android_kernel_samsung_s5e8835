@@ -303,23 +303,7 @@ static int __init early_init_on_free(char *buf)
 }
 early_param("init_on_free", early_init_on_free);
 
-/*
- * A cached value of the page's pageblock's migratetype, used when the page is
- * put on a pcplist. Used to avoid the pageblock migratetype lookup when
- * freeing from pcplists in most cases, at the cost of possibly becoming stale.
- * Also the migratetype set in the page does not necessarily match the pcplist
- * index, e.g. page might have MIGRATE_CMA set but be on a pcplist with any
- * other index - this ensures that it will be put on the correct CMA freelist.
- */
-static inline int get_pcppage_migratetype(struct page *page)
-{
-	return page->index;
-}
-
-static inline void set_pcppage_migratetype(struct page *page, int migratetype)
-{
-	page->index = migratetype;
-}
+/* get_pcppage_migratetype / set_pcppage_migratetype defined in mm/internal.h */
 
 #ifdef CONFIG_PM_SLEEP
 /*
@@ -433,6 +417,7 @@ compound_page_dtor * const compound_page_dtors[NR_COMPOUND_DTORS] = {
 };
 
 int min_free_kbytes = 1024;
+int extra_free_kbytes = 0;
 int user_min_free_kbytes = -1;
 int watermark_boost_factor __read_mostly = 15000;
 int watermark_scale_factor = 10;
@@ -8624,9 +8609,10 @@ unsigned long free_reserved_area(void *start, void *end, int poison, const char 
 	return pages;
 }
 
+unsigned long physpages, codesize, datasize, rosize, bss_size;
+
 void __init mem_init_print_info(void)
 {
-	unsigned long physpages, codesize, datasize, rosize, bss_size;
 	unsigned long init_code_size, init_data_size;
 
 	physpages = get_num_physpages();
@@ -8837,6 +8823,7 @@ static void setup_per_zone_lowmem_reserve(void)
 static void __setup_per_zone_wmarks(void)
 {
 	unsigned long pages_min = min_free_kbytes >> (PAGE_SHIFT - 10);
+	unsigned long pages_low = extra_free_kbytes >> (PAGE_SHIFT - 10);
 	unsigned long lowmem_pages = 0;
 	struct zone *zone;
 	unsigned long flags;
@@ -8848,11 +8835,13 @@ static void __setup_per_zone_wmarks(void)
 	}
 
 	for_each_zone(zone) {
-		u64 tmp;
+		u64 tmp, low;
 
 		spin_lock_irqsave(&zone->lock, flags);
 		tmp = (u64)pages_min * zone_managed_pages(zone);
 		do_div(tmp, lowmem_pages);
+		low = (u64)pages_low * zone_managed_pages(zone);
+		do_div(low, nr_free_zone_pages(gfp_zone(GFP_HIGHUSER_MOVABLE)));
 		if (is_highmem(zone)) {
 			/*
 			 * __GFP_HIGH and PF_MEMALLOC allocations usually don't
@@ -8886,8 +8875,8 @@ static void __setup_per_zone_wmarks(void)
 				      watermark_scale_factor, 10000));
 
 		zone->watermark_boost = 0;
-		zone->_watermark[WMARK_LOW]  = min_wmark_pages(zone) + tmp;
-		zone->_watermark[WMARK_HIGH] = min_wmark_pages(zone) + tmp * 2;
+		zone->_watermark[WMARK_LOW]  = min_wmark_pages(zone) + low + tmp;
+		zone->_watermark[WMARK_HIGH] = min_wmark_pages(zone) + low + tmp * 2;
 		trace_android_vh_init_adjust_zone_wmark(zone, tmp);
 
 		spin_unlock_irqrestore(&zone->lock, flags);

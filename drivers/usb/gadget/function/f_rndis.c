@@ -72,7 +72,7 @@
 /* Maximum packets per transfer for UL aggregation */
 #define RNDIS_UL_MAX_PKT_PER_XFER 3
 
-extern struct rndis_multipacket g_rndis_mp;
+struct rndis_multipacket g_rndis_mp;
 
 struct f_rndis {
 	struct gether			port;
