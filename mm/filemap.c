@@ -46,16 +46,13 @@
 #include <asm/tlbflush.h>
 #include "internal.h"
 
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-#include <linux/io_record.h>
-#endif
-
-#ifdef CONFIG_DDAR
-#include <ddar/cache_cleanup.h>
-#endif
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/filemap.h>
+
+#undef CREATE_TRACE_POINTS
+#ifndef __GENKSYMS__
+#include <trace/hooks/mm.h>
+#endif
 
 /*
  * FIXME: remove all knowledge of the buffer layer from the core VM
@@ -237,11 +234,6 @@ static void unaccount_page_cache_page(struct address_space *mapping,
 void __delete_from_page_cache(struct page *page, void *shadow)
 {
 	struct address_space *mapping = page->mapping;
-
-#ifdef CONFIG_DDAR
-	if (mapping_sensitive(mapping))
-		sdp_page_cleanup(page);
-#endif
 
 	trace_mm_filemap_delete_from_page_cache(page);
 
@@ -905,6 +897,7 @@ noinline int __add_to_page_cache_locked(struct page *page,
 	page->mapping = mapping;
 	page->index = offset;
 
+	trace_android_vh_filemap_add_to_page_cache(mapping, page, offset);
 	if (!huge) {
 		error = mem_cgroup_charge(page, NULL, gfp);
 		if (error)
@@ -1916,6 +1909,9 @@ repeat:
 			return page;
 		page = NULL;
 	}
+
+	trace_android_vh_pagecache_get_page(mapping, index, fgp_flags,
+					gfp_mask, page);
 	if (!page)
 		goto no_page;
 
@@ -2447,6 +2443,8 @@ static int filemap_update_page(struct kiocb *iocb,
 {
 	int error;
 
+	trace_android_vh_filemap_update_page(mapping, page, iocb->ki_filp);
+
 	if (iocb->ki_flags & IOCB_NOWAIT) {
 		if (!filemap_invalidate_trylock_shared(mapping))
 			return -EAGAIN;
@@ -2634,26 +2632,15 @@ ssize_t filemap_read(struct kiocb *iocb, struct iov_iter *iter,
 	bool writably_mapped;
 	loff_t isize, end_offset;
 	loff_t last_pos = ra->prev_pos;
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	pgoff_t index;
-	loff_t *ppos = &iocb->ki_pos;
-	pgoff_t last_index;
-#endif
 
 	if (unlikely(iocb->ki_pos >= inode->i_sb->s_maxbytes))
 		return 0;
 	if (unlikely(!iov_iter_count(iter)))
 		return 0;
 
-	iov_iter_truncate(iter, inode->i_sb->s_maxbytes);
+	iov_iter_truncate(iter, inode->i_sb->s_maxbytes - iocb->ki_pos);
 	pagevec_init(&pvec);
 	trace_android_vh_filemap_read(filp, iocb->ki_pos, iov_iter_count(iter));
-
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	index = *ppos >> PAGE_SHIFT;
-	last_index = (*ppos + iov_iter_count(iter) + PAGE_SIZE-1) >> PAGE_SHIFT;
-	record_io_info(filp, index, last_index - index);
-#endif
 
 	do {
 		cond_resched();
@@ -2950,6 +2937,8 @@ unlock:
 static int lock_page_maybe_drop_mmap(struct vm_fault *vmf, struct page *page,
 				     struct file **fpin)
 {
+	struct task_struct *tsk = NULL;
+
 	if (trylock_page(page))
 		return 1;
 
@@ -2962,6 +2951,7 @@ static int lock_page_maybe_drop_mmap(struct vm_fault *vmf, struct page *page,
 		return 0;
 
 	*fpin = maybe_unlock_mmap_for_io(vmf, *fpin);
+	trace_android_vh_lock_folio_drop_mmap_start(&tsk, vmf, page, *fpin);
 	if (vmf->flags & FAULT_FLAG_KILLABLE) {
 		if (__lock_page_killable(page)) {
 			/*
@@ -2972,46 +2962,16 @@ static int lock_page_maybe_drop_mmap(struct vm_fault *vmf, struct page *page,
 			 */
 			if (*fpin == NULL)
 				mmap_read_unlock(vmf->vma->vm_mm);
+			trace_android_vh_lock_folio_drop_mmap_end(false, &tsk, vmf, page, *fpin);
 			return 0;
 		}
 	} else
 		__lock_page(page);
+
+	trace_android_vh_lock_folio_drop_mmap_end(true, &tsk, vmf, page, *fpin);
 	return 1;
 }
 
-#ifdef CONFIG_TRACING
-static void filemap_tracing_mark_begin(struct file *file,
-		pgoff_t offset, unsigned int size, bool sync)
-{
-	char buf[TRACING_MARK_BUF_SIZE], *path;
-
-	if (!tracing_is_on())
-		return;
-
-	path = file_path(file, buf, TRACING_MARK_BUF_SIZE);
-	if (IS_ERR(path)) {
-		sprintf(buf, "file_path failed(%ld)", PTR_ERR(path));
-		path = buf;
-	}
-
-	tracing_mark_begin("%d , %s , %lu , %d", sync, path, offset, size);
-}
-
-static void filemap_tracing_mark_end()
-{
-    tracing_mark_end();
-}
-#else
-static void filemap_tracing_mark_begin(struct file *file,
-		pgoff_t offset, unsigned int size, bool sync) { }
-static void filemap_tracing_mark_end() { }
-#endif
-
-#if CONFIG_MMAP_READAROUND_LIMIT == 0
-unsigned int mmap_readaround_limit = VM_READAHEAD_PAGES; 		/* page */
-#else
-unsigned int mmap_readaround_limit = CONFIG_MMAP_READAROUND_LIMIT;	/* page */
-#endif
 
 /*
  * Synchronous readahead happens when we don't even find a page in the page
@@ -3028,8 +2988,6 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	DEFINE_READAHEAD(ractl, file, ra, mapping, vmf->pgoff);
 	struct file *fpin = NULL;
 	unsigned int mmap_miss;
-	unsigned int ra_pages;
-	pgoff_t offset = vmf->pgoff;
 
 	/* If we don't want any read-ahead, don't bother */
 	if (vmf->vma->vm_flags & VM_RAND_READ)
@@ -3039,9 +2997,7 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 
 	if (vmf->vma->vm_flags & VM_SEQ_READ) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_tracing_mark_begin(file, offset, ra->ra_pages, 1);
 		page_cache_sync_ra(&ractl, ra->ra_pages);
-		filemap_tracing_mark_end();
 		return fpin;
 	}
 
@@ -3061,18 +3017,14 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	 * mmap read-around
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	ra_pages = min_t(unsigned int, ra->ra_pages, mmap_readaround_limit);
-	if (need_memory_boosting())
-		ra_pages = min_t(unsigned int, ra_pages, 8);
-	ra->start = max_t(long, 0, vmf->pgoff - ra_pages / 2);
-	ra->size = ra_pages;
-	ra->async_size = ra_pages / 4;
+	ra->start = max_t(long, 0, vmf->pgoff - ra->ra_pages / 2);
+	ra->size = ra->ra_pages;
+	ra->async_size = ra->ra_pages / 4;
 	trace_android_vh_tune_mmap_readaround(ra->ra_pages, vmf->pgoff,
 			&ra->start, &ra->size, &ra->async_size);
 	ractl._index = ra->start;
-	filemap_tracing_mark_begin(file, offset, ra_pages, 1);
+	trace_android_vh_page_cache_read(file->f_inode, ra->start, ra->size);
 	do_page_cache_ra(&ractl, ra->size, ra->async_size);
-	filemap_tracing_mark_end();
 	return fpin;
 }
 
@@ -3090,6 +3042,11 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 	struct file *fpin = NULL;
 	unsigned int mmap_miss;
 	pgoff_t offset = vmf->pgoff;
+	bool skip = false;
+
+	trace_android_vh_do_async_mmap_readahead(vmf, page, &skip);
+	if (skip)
+		return fpin;
 
 	/* If we don't want any read-ahead, don't bother */
 	if (vmf->vma->vm_flags & VM_RAND_READ || !ra->ra_pages)
@@ -3099,10 +3056,8 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 		WRITE_ONCE(ra->mmap_miss, --mmap_miss);
 	if (PageReadahead(page)) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_tracing_mark_begin(file, offset, ra->ra_pages, 0);
 		page_cache_async_readahead(mapping, ra, file,
 					   page, offset, ra->ra_pages);
-		filemap_tracing_mark_end();
 	}
 	return fpin;
 }
@@ -3238,6 +3193,8 @@ retry_find:
 		}
 	}
 
+	trace_android_vh_filemap_fault_pre_page_locked(page);
+
 	if (!lock_page_maybe_drop_mmap(vmf, page, &fpin))
 		goto out_retry;
 
@@ -3302,9 +3259,8 @@ page_not_uptodate:
 	 * and we need to check for errors.
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	filemap_tracing_mark_begin(file, offset, 1, 1);
+	trace_android_vh_page_cache_read(file->f_inode, offset, 1);
 	error = filemap_read_page(file, mapping, page);
-	filemap_tracing_mark_end();
 	if (fpin)
 		goto out_retry;
 	put_page(page);
@@ -3444,19 +3400,12 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 	vm_fault_t ret = (vmf->flags & FAULT_FLAG_SPECULATIVE) ?
 		VM_FAULT_RETRY : 0;
 	pgoff_t first_pgoff = 0;
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	pgoff_t head_pgoff = 0;
-#endif
 
 	/* filemap_map_pages() is called within an rcu read lock already. */
 	head = first_map_page(mapping, &xas, end_pgoff);
 	if (!head)
 		return ret;
 	first_pgoff = xas.xa_index;
-
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	head_pgoff = xas.xa_index;
-#endif
 
 	if (!(vmf->flags & FAULT_FLAG_SPECULATIVE) &&
 	    filemap_map_pmd(vmf, head))
@@ -3481,6 +3430,7 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 		addr += (xas.xa_index - last_pgoff) << PAGE_SHIFT;
 		vmf->pte += xas.xa_index - last_pgoff;
 		last_pgoff = xas.xa_index;
+		trace_android_vh_filemap_pages(page);
 
 		if (!pte_none(*vmf->pte))
 			goto unlock;
@@ -3496,18 +3446,13 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 		continue;
 unlock:
 		unlock_page(head);
+		trace_android_vh_filemap_page_mapped(head);
 		put_page(head);
 	} while ((head = next_map_page(mapping, &xas, end_pgoff)) != NULL);
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
 	vmf->pte = NULL;
 	WRITE_ONCE(file->f_ra.mmap_miss, mmap_miss);
 	trace_android_vh_filemap_map_pages(file, first_pgoff, last_pgoff, ret);
-
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-	/* end_pgoff is inclusive */
-	if (ret == VM_FAULT_NOPAGE)
-		record_io_info(file, head_pgoff, last_pgoff - head_pgoff + 1);
-#endif
 	return ret;
 }
 EXPORT_SYMBOL(filemap_map_pages);
@@ -3563,7 +3508,7 @@ int generic_file_mmap(struct file *file, struct vm_area_struct *vma)
  */
 int generic_file_readonly_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	if ((vma->vm_flags & VM_SHARED) && (vma->vm_flags & VM_MAYWRITE))
+	if (vma_is_shared_maywrite(vma))
 		return -EINVAL;
 	return generic_file_mmap(file, vma);
 }
@@ -3606,6 +3551,8 @@ static struct page *do_read_cache_page(struct address_space *mapping,
 {
 	struct page *page;
 	int err;
+
+	trace_android_vh_page_cache_read(mapping->host, index, 1);
 repeat:
 	page = find_get_page(mapping, index);
 	if (!page) {

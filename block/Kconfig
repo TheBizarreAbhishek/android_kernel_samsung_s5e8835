@@ -28,15 +28,13 @@ if BLOCK
 
 config BLOCK_LEGACY_AUTOLOAD
 	bool "Legacy autoloading support"
+	default y
 	help
 	  Enable loading modules and creating block device instances based on
 	  accesses through their device special file.  This is a historic Linux
 	  feature and makes no sense in a udev world where device files are
-	  created on demand.
-
-	  Say N here unless booting or other functionality broke without it, in
-	  which case you should also send a report to your distribution and
-	  linux-block@vger.kernel.org.
+	  created on demand, but scripts that manually create device nodes and
+	  then call losetup might rely on this behavior.
 
 config BLK_RQ_ALLOC_TIME
 	bool
@@ -202,29 +200,6 @@ config BLK_INLINE_ENCRYPTION_FALLBACK
 	  by falling back to the kernel crypto API when inline
 	  encryption hardware is not present.
 
-config BLK_SEC_COMMON
-	tristate "Samsung specific module in block layer"
-	default n
-	help
-	  Say Y here if you want to be enable samsung specific module
-	  in block layer.
-
-config BLK_SEC_STATS
-	tristate "Samsung statistics module in block layer"
-	default n
-	select BLK_SEC_COMMON
-	help
-	  Say Y here if you want to be enable samsung statistics module
-	  in block layer.
-
-config BLK_SEC_WB
-	tristate "Samsung Write Booster module in block layer"
-	default n
-	select BLK_SEC_COMMON
-	help
-	  Say Y here if you want to be enable samsung write booster module
-	  in block layer.
-
 menu "Partition Types"
 
 source "block/partitions/Kconfig"
@@ -255,11 +230,6 @@ config BLK_MQ_RDMA
 
 config BLK_PM
 	def_bool BLOCK && PM
-
-config BLOCK_SUPPORT_STLOG
-	bool "Enable storage log"
-	depends on BLOCK && PROC_STLOG
-	default y
 
 # do not use in new code
 config BLOCK_HOLDER_DEPRECATED

@@ -16,6 +16,7 @@
 #ifdef CONFIG_CMA
 #include <linux/cma.h>
 #endif
+#include <trace/hooks/mm.h>
 #include <asm/page.h>
 #include "internal.h"
 #include <trace/hooks/mm.h>
@@ -29,10 +30,6 @@ static void show_val_kb(struct seq_file *m, const char *s, unsigned long num)
 	seq_write(m, " kB\n", 4);
 }
 
-#ifdef CONFIG_RBIN
-unsigned long rbin_total;
-#endif
-
 static int meminfo_proc_show(struct seq_file *m, void *v)
 {
 	struct sysinfo i;
@@ -42,9 +39,6 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	unsigned long pages[NR_LRU_LISTS];
 	unsigned long sreclaimable, sunreclaim;
 	int lru;
-#ifdef CONFIG_RBIN
-	int stats[NR_RBIN_STAT_ITEMS] = {0,};
-#endif
 
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -52,11 +46,7 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 
 	cached = global_node_page_state(NR_FILE_PAGES) -
 			total_swapcache_pages() - i.bufferram;
-#ifdef CONFIG_RBIN
-	rbin_oem_func(GET_RBIN_STATS, stats);
-	cached += stats[RBIN_CACHED];
-#endif
-
+	trace_android_vh_meminfo_cache_adjust(&cached);
 	if (cached < 0)
 		cached = 0;
 
@@ -68,13 +58,8 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	sunreclaim = global_node_page_state_pages(NR_SLAB_UNRECLAIMABLE_B);
 
 	show_val_kb(m, "MemTotal:       ", i.totalram);
-#ifdef CONFIG_RBIN
-	show_val_kb(m, "MemFree:        ", i.freeram + stats[RBIN_FREE]);
-	show_val_kb(m, "MemAvailable:   ", available + stats[RBIN_FREE]);
-#else
 	show_val_kb(m, "MemFree:        ", i.freeram);
 	show_val_kb(m, "MemAvailable:   ", available);
-#endif
 	show_val_kb(m, "Buffers:        ", i.bufferram);
 	show_val_kb(m, "Cached:         ", cached);
 	show_val_kb(m, "SwapCached:     ", total_swapcache_pages());
@@ -99,13 +84,6 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 #ifndef CONFIG_MMU
 	show_val_kb(m, "MmapCopy:       ",
 		    (unsigned long)atomic_long_read(&mmap_pages_allocated));
-#endif
-#ifdef CONFIG_RBIN
-	show_val_kb(m, "RbinTotal:      ", rbin_total);
-	show_val_kb(m, "RbinAlloced:    ", stats[RBIN_ALLOCATED] + stats[RBIN_POOL]);
-	show_val_kb(m, "RbinPool:       ", stats[RBIN_POOL]);
-	show_val_kb(m, "RbinFree:       ", stats[RBIN_FREE]);
-	show_val_kb(m, "RbinCached:     ", stats[RBIN_CACHED]);
 #endif
 
 	show_val_kb(m, "SwapTotal:      ", i.totalswap);
