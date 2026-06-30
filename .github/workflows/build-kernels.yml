@@ -9,43 +9,9 @@ on:
                 default: false
                 type: boolean
             notifications:
-                description: "Telegram: post build-start and release messages"
+                description: "Telegram: post release messages"
                 required: false
                 default: false
-                type: boolean
-            kernelsu:
-                description: "KernelSU variant"
-                required: false
-                default: "ksunext"
-                type: choice
-                options:
-                    - none
-                    - ksu
-                    - ksunext
-            susfs:
-                description: "SUSFS"
-                required: false
-                default: true
-                type: boolean
-            zeromount:
-                description: "Zeromount"
-                required: false
-                default: false
-                type: boolean
-            mountify:
-                description: "Mountify (TMPFS_XATTR)"
-                required: false
-                default: true
-                type: boolean
-            ntsync:
-                description: "NTSYNC"
-                required: false
-                default: true
-                type: boolean
-            bbrv3:
-                description: "BBRv3"
-                required: false
-                default: true
                 type: boolean
 
 permissions:
@@ -64,35 +30,50 @@ defaults:
         shell: bash
 
 jobs:
-    notify-start:
-        name: Send Start Notification
-        runs-on: ubuntu-latest
-        if: github.event.inputs.notifications == 'true'
-        steps:
-            - name: Send Telegram Start Notification
-              run: |
-                  curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-                    -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-                    -F message_thread_id="${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}" \
-                    -F parse_mode="Markdown" \
-                    -F disable_web_page_preview=true \
-                    -F text="$(printf '%s\n' \
-                      '🔨 *Bizarre Kernel Build Started*' \
-                      '━━━━━━━━━━━━━━━━━━━━━━' \
-                      '📦 *Variant:* \`KernelSU-Next + SUSFS\`' \
-                      '📱 *Devices:* \`Galaxy M35 + A35 (s5e8835)\`' \
-                      '🗃️ *Repo:* \`${{ github.repository }}\`' \
-                      '🔢 *Run ID:* \`${{ github.run_id }}\`' \
-                      '━━━━━━━━━━━━━━━━━━━━━━' \
-                      '🔗 [Open Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})')"
-
     build:
-        name: Build Bizarre Kernel
-        needs: [notify-start]
-        if: ${{ !cancelled() && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped') }}
+        name: Build Bizarre Kernel (${{ matrix.variant }})
         runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - variant: "clean"
+                      kernelsu: "none"
+                      susfs: "false"
+                      permissive: "false"
+                      zeromount: "false"
+                    - variant: "permissive"
+                      kernelsu: "none"
+                      susfs: "false"
+                      permissive: "true"
+                      zeromount: "false"
+                    - variant: "ksu"
+                      kernelsu: "ksu"
+                      susfs: "false"
+                      permissive: "false"
+                      zeromount: "false"
+                    - variant: "ksunext"
+                      kernelsu: "ksunext"
+                      susfs: "false"
+                      permissive: "false"
+                      zeromount: "false"
+                    - variant: "ksu-susfs"
+                      kernelsu: "ksu"
+                      susfs: "true"
+                      permissive: "false"
+                      zeromount: "false"
+                    - variant: "ksunext-susfs"
+                      kernelsu: "ksunext"
+                      susfs: "true"
+                      permissive: "false"
+                      zeromount: "false"
+                    - variant: "ksunext-susfs-zm"
+                      kernelsu: "ksunext"
+                      susfs: "true"
+                      permissive: "false"
+                      zeromount: "true"
         env:
-            BUILD_LOCALVERSION: -Bizarre-KSUN_SUSFS
+            BUILD_LOCALVERSION: -Bizarre-${{ matrix.variant }}
 
         steps:
             - name: Free disk space
@@ -142,82 +123,83 @@ jobs:
                   git clone --depth=1 --branch bizarre https://github.com/TheBizarreAbhishek/AnyKernel3.git "$HOME/AnyKernel3"
                   echo "✅ AnyKernel3 ready"
 
-            - name: Fetch kernel patches (WildKernels)
-              run: |
-                  echo "⬇️  Cloning WildKernels kernel patches..."
-                  git clone --depth=1 https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
-                  echo "✅ WildKernels patches ready"
-
             - name: Import KernelSU
-              if: github.event.inputs.kernelsu != 'none'
+              if: matrix.kernelsu != 'none'
               run: |
                   set -euo pipefail
                   cd "$GITHUB_WORKSPACE"
-                  if [[ "${{ github.event.inputs.kernelsu }}" == "ksunext" ]]; then
-                    echo "🔧 Integrating KernelSU Next..."
-                    curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-                    echo "✅ KernelSU-Next driver ready"
+                  if [[ "${{ matrix.kernelsu }}" == "ksunext" ]]; then
+                    if [[ "${{ matrix.susfs }}" == "true" ]]; then
+                      echo "🔧 Integrating KernelSU Next (pershoot dev-susfs)..."
+                      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s dev-susfs
+                      echo "✅ KernelSU-Next (pershoot dev-susfs) driver ready"
+                    else
+                      echo "🔧 Integrating KernelSU Next (rifsxd next)..."
+                      curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+                      echo "✅ KernelSU-Next driver ready"
+                    fi
                   else
-                    echo "🔧 Integrating KernelSU (tiann)..."
-                    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+                    echo "🔧 Integrating KernelSU (tiann - stable)..."
+                    curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
                     echo "✅ KernelSU driver ready"
                   fi
 
             - name: Apply SUSFS patches
-              if: github.event.inputs.susfs == 'true'
+              if: matrix.susfs == 'true'
               run: |
                   set -euo pipefail
                   cd "$GITHUB_WORKSPACE"
 
-                  echo "⬇️  Cloning SUSFS (gki-android13-5.15)..."
-                  git clone --depth=1 -b gki-android13-5.15 https://gitlab.com/simonpunk/susfs4ksu.git "$HOME/susfs4ksu"
+                  echo "🩹 Applying SUSFS kernel patch..."
+                  patch -p1 --forward < scripts/patches/kernel/0001-susfs-for-samsung-s5e8835.patch \
+                    || echo "  ⚠️  Some hunks in SUSFS patch were skipped (expected for partial apply)"
 
-                  # Pre-process Samsung-specific hooks that conflict with SUSFS patches
-                  echo "🔧 Removing Samsung DEFEX hook from fs/open.c..."
-                  sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
+                  # Add SUSFS_VERSION info to kernel/Makefile
+                  if ! grep -q "SUSFS_VERSION" kernel/Makefile 2>/dev/null; then
+                    echo "🔧 Adding SUSFS_VERSION to kernel/Makefile..."
+                    echo "" >> kernel/Makefile
+                    echo "## For susfs stuff ##" >> kernel/Makefile
+                    echo "ifeq (\$(shell test -e \$(srctree)/fs/susfs.c; echo \$\$\?),0)" >> kernel/Makefile
+                    echo "\$(eval SUSFS_VERSION=\$(shell cat \$(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/\"//g'))" >> kernel/Makefile
+                    echo "\$(info )" >> kernel/Makefile
+                    echo "\$(info -- SUSFS_VERSION: \$(SUSFS_VERSION))" >> kernel/Makefile
+                    echo "else" >> kernel/Makefile
+                    echo "\$(info -- SUSFS: susfs.c not found, SUSFS not integrated)" >> kernel/Makefile
+                    echo "endif" >> kernel/Makefile
+                  fi
 
-                  echo "🔧 Removing Samsung KDP_NS conflict in fs/namespace.c..."
-                  sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
-                    /#ifdef CONFIG_KDP_NS/,/#endif/ {
-                      /#else/,/#endif/!d
-                      /#else/d
-                      /#endif/d
-                    }
-                  }' fs/namespace.c
+                  # Apply KSU driver SUSFS hook patch (tiann only)
+                  if [[ "${{ matrix.kernelsu }}" == "ksu" ]]; then
+                    echo "🩹 Applying KSU tiann SUSFS hook patch..."
+                    patch -p1 -d drivers/kernelsu \
+                      < scripts/patches/ksu/tiann/0001-susfs-hook-tiann.patch \
+                      || echo "  ⚠️  Some KSU hook hunks skipped (may already be applied)"
+                  fi
 
-                  echo "🩹 Applying SUSFS kernel patch (allow partial)..."
-                  patch -p1 -F3 < "$HOME/susfs4ksu/kernel_patches/50_add_susfs_in_gki-android13-5.15.patch" || true
-
-                  # Samsung's extra includes shift context — inject missing susfs_def.h manually
-                  echo "🔧 Injecting missing susfs_def.h includes in Samsung-modified files..."
-                  inject_susfs_include() {
-                    local f="$1" anchor="$2"
-                    if ! grep -q 'susfs_def\.h' "$f"; then
-                      echo "  → $f"
-                      sed -i "/${anchor}/i #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif" "$f" || true
-                    fi
-                  }
-                  inject_susfs_include fs/exec.c          '^#include <linux\/uaccess.h>'
-                  inject_susfs_include fs/namespace.c     '^#include "pnode.h"'
-                  inject_susfs_include fs/proc/base.c     '^#include <trace\/events\/oom.h>'
-                  inject_susfs_include fs/proc/task_mmu.c '^#include <asm\/elf.h>'
-                  inject_susfs_include fs/open.c          '^#include "internal.h"'
-
-                  # Clean up any .rej files — they are expected for Samsung-modified source
                   find . -name '*.rej' -delete 2>/dev/null || true
+                  echo "✅ SUSFS patches applied cleanly"
 
-                  echo "🩹 Applying KernelSU SUSFS hook patch..."
-                  patch -p1 -d drivers/kernelsu < "$HOME/susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch" || true
+            - name: Add NTSYNC
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "🩹 Applying NTSYNC..."
+                  # NTSYNC is always applied from WildKernels patches repository
+                  git clone --depth=1 https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
+                  patch -p1 < "$HOME/kernel_patches/common/ntsync/ntsync_base.patch" || true
+                  patch -p1 < "$HOME/kernel_patches/common/ntsync/ntsync_compat_android13-5.15.patch" || true
+                  echo "✅ NTSYNC applied"
 
-                  echo "📋 Copying SUSFS source files..."
-                  cp -f "$HOME/susfs4ksu/kernel_patches/fs/susfs.c" fs/
-                  cp -f "$HOME/susfs4ksu/kernel_patches/include/linux/susfs.h" include/linux/
-                  cp -f "$HOME/susfs4ksu/kernel_patches/include/linux/susfs_def.h" include/linux/
-
-                  echo "✅ SUSFS patches applied"
+            - name: Add BBRv3
+              run: |
+                  set -euo pipefail
+                  cd "$GITHUB_WORKSPACE"
+                  echo "⚙️ Applying BBRv3 from local patch..."
+                  patch -p1 < scripts/patches/kernel/0002-bbrv3-android13-5.15.patch || true
+                  echo "✅ BBRv3 applied"
 
             - name: Apply Zeromount patch
-              if: github.event.inputs.zeromount == 'true'
+              if: matrix.zeromount == 'true'
               run: |
                   set -euo pipefail
                   ZB="$HOME/Super-Builders"
@@ -246,6 +228,14 @@ jobs:
                       '#endif' > "$_zm_task_mmu"
                     sed -i "/pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;/r $_zm_task_mmu" fs/proc/task_mmu.c
                     rm -f "$_zm_task_mmu"
+
+                    _zm_include=$(mktemp)
+                    printf '%s\n' \
+                      '#ifdef CONFIG_ZEROMOUNT' \
+                      '#include <linux/zeromount.h>' \
+                      '#endif' > "$_zm_include"
+                    sed -i "/#include <linux\/pagewalk.h>/r $_zm_include" fs/proc/task_mmu.c
+                    rm -f "$_zm_include"
                   fi
 
                   if [[ -f fs/Kconfig.rej ]]; then
@@ -259,80 +249,64 @@ jobs:
                   rm -f fs/namei.c.rej fs/readdir.c.rej fs/stat.c.rej fs/proc/task_mmu.c.rej 2>/dev/null || true
                   echo "✅ Zeromount applied"
 
-            - name: Add NTSYNC
-              if: github.event.inputs.ntsync == 'true'
-              run: |
-                  set -euo pipefail
-                  PATCHES_DIR="$HOME/kernel_patches"
-                  cd "$GITHUB_WORKSPACE"
-                  echo "⚙️ Applying NTSYNC..."
-                  cp "$PATCHES_DIR/common/ntsync/ntsync_base.patch" .
-                  cp "$PATCHES_DIR/common/ntsync/ntsync_compat_android13-5.15.patch" .
-                  patch -p1 < ntsync_base.patch || true
-                  patch -p1 < ntsync_compat_android13-5.15.patch
-                  echo "✅ NTSYNC applied"
-
-            - name: Add BBRv3
-              if: github.event.inputs.bbrv3 == 'true'
-              run: |
-                  set -euo pipefail
-                  cd "$GITHUB_WORKSPACE"
-                  echo "⚙️ Applying BBRv3..."
-                  curl -L -s https://raw.githubusercontent.com/fatalcoder524/kernel_patches_additional/refs/heads/main/bbr3/0001-net-tcp-backport-BBRv3-to-android13-5.15.patch | patch -p1 -F3
-                  echo "✅ BBRv3 applied"
-
             - name: Configure build options
               run: |
                   set -euo pipefail
                   cd "$GITHUB_WORKSPACE"
+                  echo "⚙️  Generating custom.config..."
+                  touch arch/arm64/configs/custom.config
 
-                  # Start fresh custom.config
-                  > arch/arm64/configs/custom.config
+                  # Base config options
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_SLUB_DEBUG
+                  ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_SCHED_AUTOGROUP
 
-                  echo "⚙️ Setting LOCALVERSION..."
-                  ./scripts/config --file arch/arm64/configs/custom.config \
-                    --set-str CONFIG_LOCALVERSION "${{ env.BUILD_LOCALVERSION }}" \
-                    --set-val CONFIG_LOCALVERSION_AUTO n
-
-                  if [[ "${{ github.event.inputs.kernelsu }}" != "none" ]]; then
-                    echo "⚙️ Enabling KernelSU..."
-                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU
+                  if [[ "${{ matrix.permissive }}" == "true" ]]; then
+                    echo "⚙️ Enabling Permissive Mode..."
+                    ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_SECURITY_SELINUX_DEVELOP
                   fi
 
-                  if [[ "${{ github.event.inputs.susfs }}" == "true" ]]; then
+                  if [[ "${{ matrix.kernelsu }}" != "none" ]]; then
+                    echo "⚙️ Enabling KernelSU..."
+                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_KSU
+                    ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_KSU_KPROBES_HOOK
+                  fi
+
+                  if [[ "${{ matrix.susfs }}" == "true" ]]; then
                     echo "⚙️ Enabling SUSFS..."
                     ./scripts/config --file arch/arm64/configs/custom.config \
                       --enable CONFIG_KSU_SUSFS \
-                      --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT
+                      --enable CONFIG_KSU_SUSFS_SUS_PATH \
+                      --enable CONFIG_KSU_SUSFS_SUS_MOUNT \
+                      --enable CONFIG_KSU_SUSFS_SUS_KSTAT \
+                      --disable CONFIG_KSU_SUSFS_SUS_OVERLAYFS \
+                      --enable CONFIG_KSU_SUSFS_TRY_UMOUNT \
+                      --enable CONFIG_KSU_SUSFS_SPOOFER \
+                      --enable CONFIG_KSU_SUSFS_OPEN_REDIRECT \
+                      --disable CONFIG_KSU_SUSFS_SUS_SU
                   fi
 
-                  if [[ "${{ github.event.inputs.zeromount }}" == "true" ]]; then
+                  # NTSYNC is always enabled
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
+
+                  # BBRv3 is always enabled
+                  ./scripts/config --file arch/arm64/configs/custom.config \
+                    --enable CONFIG_TCP_CONG_ADVANCED \
+                    --enable CONFIG_TCP_CONG_BBR \
+                    --enable CONFIG_TCP_CONG_BBR3 \
+                    --enable CONFIG_TCP_CONG_CUBIC \
+                    --enable CONFIG_DEFAULT_CUBIC \
+                    --enable CONFIG_NET_SCH_FQ
+
+                  if [[ "${{ matrix.zeromount }}" == "true" ]]; then
                     echo "⚙️ Enabling Zeromount..."
                     ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
                   fi
 
-                  if [[ "${{ github.event.inputs.mountify }}" == "true" ]]; then
-                    echo "⚙️ Enabling Mountify (TMPFS_XATTR)..."
-                    ./scripts/config --file arch/arm64/configs/custom.config \
-                      --enable CONFIG_TMPFS_XATTR \
-                      --enable CONFIG_TMPFS_POSIX_ACL
-                  fi
+                  # TMPFS XATTR is always enabled (mountify)
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_TMPFS_XATTR
 
-                  if [[ "${{ github.event.inputs.ntsync }}" == "true" ]]; then
-                    echo "⚙️ Enabling NTSYNC..."
-                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
-                  fi
-
-                  if [[ "${{ github.event.inputs.bbrv3 }}" == "true" ]]; then
-                    echo "⚙️ Enabling BBRv3..."
-                    ./scripts/config --file arch/arm64/configs/custom.config \
-                      --enable CONFIG_TCP_CONG_ADVANCED \
-                      --enable CONFIG_TCP_CONG_BBR \
-                      --enable CONFIG_TCP_CONG_BBR3 \
-                      --enable CONFIG_TCP_CONG_CUBIC \
-                      --enable CONFIG_DEFAULT_CUBIC \
-                      --enable CONFIG_NET_SCH_FQ
-                  fi
+                  # BBG is always enabled
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_BBG
 
                   echo "✅ Build configuration ready"
                   echo "--- custom.config ---"
@@ -352,7 +326,7 @@ jobs:
 
                   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                   echo "🏗️  Starting Bizarre Kernel build"
-                  echo "   Devices    : Galaxy M35 (m35x) + A35 (a35x)"
+                  echo "   Variant    : ${{ matrix.variant }}"
                   echo "   Threads    : $(nproc --all)"
                   echo "   Clang      : $(clang --version | head -1)"
                   echo "   Output     : $GITHUB_WORKSPACE/out"
@@ -362,9 +336,9 @@ jobs:
                   make $MAKE_PARAMS bizarre_defconfig custom.config
 
                   echo ""
-                  echo "🔨 Compiling kernel..."
+                  echo "🔨 Compiling kernel & DTBs..."
                   BUILD_START=$(date +%s)
-                  make $MAKE_PARAMS
+                  make $MAKE_PARAMS && make $MAKE_PARAMS dtbs
                   BUILD_END=$(date +%s)
                   BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
 
@@ -388,13 +362,16 @@ jobs:
                   set -euo pipefail
                   OUT=$GITHUB_WORKSPACE/out/arch/arm64/boot
 
+                  echo "⬇️  Downloading mkdtboimg.py tool from AOSP..."
+                  python3 -c "import urllib.request, base64; url = 'https://android.googlesource.com/platform/system/libufdt/+/refs/heads/main/utils/src/mkdtboimg.py?format=TEXT'; data = urllib.request.urlopen(url).read(); open('mkdtboimg.py', 'wb').write(base64.b64decode(data))"
+
                   echo "📦 Packing M35x DTBOs..."
-                  python3 scripts/ufdt/libufdt/utils/src/mkdtboimg.py create \
+                  python3 mkdtboimg.py create \
                     dtbo-m35x.img \
                     $(ls $OUT/dts/samsung/m35x/*.dtbo | sort)
 
                   echo "📦 Packing A35x DTBOs..."
-                  python3 scripts/ufdt/libufdt/utils/src/mkdtboimg.py create \
+                  python3 mkdtboimg.py create \
                     dtbo-a35x.img \
                     $(ls $OUT/dts/samsung/a35x/*.dtbo | sort)
 
@@ -423,19 +400,18 @@ jobs:
             - name: Upload kernel artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: Bizarre-Kernel-${{ env.DATE }}
+                  name: Bizarre-Kernel-${{ matrix.variant }}-${{ env.DATE }}
                   path: /home/runner/AnyKernel3/*.zip
                   if-no-files-found: error
                   retention-days: 7
 
     publish-release:
         name: Publish GitHub Release
-        needs: [notify-start, build]
+        needs: [build]
         runs-on: ubuntu-latest
         if: >-
             !cancelled()
             && needs.build.result == 'success'
-            && (needs.notify-start.result == 'success' || needs.notify-start.result == 'skipped')
         steps:
             - name: Set date
               id: date
@@ -460,13 +436,16 @@ jobs:
                       ### Bizarre Kernel for Galaxy M35 + A35 (Exynos 1380 / s5e8835)
 
                       ### Features
-                      - KernelSU-Next: https://github.com/rifsxd/KernelSU-Next
+                      - KernelSU-Next: https://github.com/rifsxd/KernelSU-Next (matrix variants)
+                      - KernelSU (tiann stable): https://github.com/tiann/KernelSU (matrix variants)
                       - SUSFS: https://gitlab.com/simonpunk/susfs4ksu
+                      - BBRv3 network TCP congestion control
+                      - NTSYNC support
                       - Unified kernel for both SM-M356B and SM-A356B
                       - Android 16 / One UI 7
 
                       ### Flashing Instructions
-                      1. Flash the zip via KernelSU-Next Manager or any recovery
+                      1. Flash the zip via KernelSU Manager or any recovery
                       2. Device is automatically detected — correct DTBO is flashed
                       3. Reboot
 

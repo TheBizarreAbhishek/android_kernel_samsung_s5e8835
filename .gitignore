@@ -111,6 +111,8 @@ patches-*
 
 # quilt's files
 patches
+# but NOT our own managed patches directory
+!scripts/patches
 series
 
 # ctags files
