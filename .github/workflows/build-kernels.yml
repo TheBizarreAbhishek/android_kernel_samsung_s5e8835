@@ -250,6 +250,18 @@ jobs:
                     rm -f "$_zm_include"
                   fi
 
+                  # Fix readdir.c — remove orphaned zm_out: labels when goto zm_out is missing
+                  if grep -q 'zm_out:' fs/readdir.c && ! grep -q 'goto zm_out' fs/readdir.c; then
+                    echo "🔧 Removing orphaned zm_out: labels from fs/readdir.c..."
+                    perl -0pi -e 's/#ifdef CONFIG_ZEROMOUNT\nzm_out:\n#endif\n//g' fs/readdir.c
+                  fi
+
+                  # Fix stat.c — remove orphaned zm_out: labels similarly
+                  if grep -q 'zm_out:' fs/stat.c && ! grep -q 'goto zm_out' fs/stat.c; then
+                    echo "🔧 Removing orphaned zm_out: labels from fs/stat.c..."
+                    perl -0pi -e 's/#ifdef CONFIG_ZEROMOUNT\nzm_out:\n#endif\n//g' fs/stat.c
+                  fi
+
                   if [[ -f fs/Kconfig.rej ]]; then
                     echo "🔧 Fixing fs/Kconfig..."
                     if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
