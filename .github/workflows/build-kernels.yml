@@ -214,6 +214,12 @@ jobs:
                   patch -p1 < 60_zeromount-android13-5.15.patch || true
                   rm -f 60_zeromount-android13-5.15.patch
 
+                  # Fix fs/namei.c — inject zeromount.h include if patch hunk failed
+                  if ! grep -q 'zeromount.h' fs/namei.c; then
+                    echo "🔧 Injecting zeromount.h include into fs/namei.c..."
+                    sed -i '/#include "internal.h"/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/namei.c
+                  fi
+
                   if [[ -f fs/proc/task_mmu.c ]] && ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
                     echo "🔧 Fixing fs/proc/task_mmu.c..."
                     _zm_task_mmu=$(mktemp)
