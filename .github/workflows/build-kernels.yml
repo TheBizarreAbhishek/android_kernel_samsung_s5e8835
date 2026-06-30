@@ -13,6 +13,16 @@ on:
                 required: false
                 default: false
                 type: boolean
+            enable_bbrv3:
+                description: "Enable BBRv3 TCP congestion control"
+                required: false
+                default: true
+                type: boolean
+            enable_zeromount:
+                description: "Enable ZeroMount path redirection (all variants)"
+                required: false
+                default: true
+                type: boolean
 
 permissions:
     contents: write
@@ -186,6 +196,7 @@ jobs:
                   echo "✅ NTSYNC applied"
 
             - name: Add BBRv3
+              if: github.event.inputs.enable_bbrv3 != 'false'
               run: |
                   set -euo pipefail
                   cd "$GITHUB_WORKSPACE"
@@ -194,7 +205,7 @@ jobs:
                   echo "✅ BBRv3 applied"
 
             - name: Apply Zeromount patch
-              if: matrix.zeromount == 'true'
+              if: matrix.zeromount == 'true' && github.event.inputs.enable_zeromount != 'false'
               run: |
                   set -euo pipefail
                   ZB="$HOME/Super-Builders"
@@ -289,16 +300,19 @@ jobs:
                   # NTSYNC is always enabled
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
 
-                  # BBRv3 is always enabled
-                  ./scripts/config --file arch/arm64/configs/custom.config \
-                    --enable CONFIG_TCP_CONG_ADVANCED \
-                    --enable CONFIG_TCP_CONG_BBR \
-                    --enable CONFIG_TCP_CONG_BBR3 \
-                    --enable CONFIG_TCP_CONG_CUBIC \
-                    --enable CONFIG_DEFAULT_CUBIC \
-                    --enable CONFIG_NET_SCH_FQ
+                  # BBRv3 — enabled unless disabled via input
+                  if [[ "${{ github.event.inputs.enable_bbrv3 }}" != "false" ]]; then
+                    echo "⚙️ Enabling BBRv3..."
+                    ./scripts/config --file arch/arm64/configs/custom.config \
+                      --enable CONFIG_TCP_CONG_ADVANCED \
+                      --enable CONFIG_TCP_CONG_BBR \
+                      --enable CONFIG_TCP_CONG_BBR3 \
+                      --enable CONFIG_TCP_CONG_CUBIC \
+                      --enable CONFIG_DEFAULT_CUBIC \
+                      --enable CONFIG_NET_SCH_FQ
+                  fi
 
-                  if [[ "${{ matrix.zeromount }}" == "true" ]]; then
+                  if [[ "${{ matrix.zeromount }}" == "true" && "${{ github.event.inputs.enable_zeromount }}" != "false" ]]; then
                     echo "⚙️ Enabling Zeromount..."
                     ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
                   fi
