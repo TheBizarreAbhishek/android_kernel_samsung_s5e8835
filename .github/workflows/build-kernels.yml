@@ -41,28 +41,34 @@ jobs:
                       kernelsu: "none"
                       susfs: "false"
                       permissive: "false"
+                      localversion: "-bizarrekernel-clean"
                     - variant: "permissive"
                       kernelsu: "none"
                       susfs: "false"
                       permissive: "true"
+                      localversion: "-bizarrekernel-permissive"
                     - variant: "ksu"
                       kernelsu: "ksu"
                       susfs: "false"
                       permissive: "false"
+                      localversion: "-bizarrekernel-ksu"
                     - variant: "ksunext"
                       kernelsu: "ksunext"
                       susfs: "false"
                       permissive: "false"
+                      localversion: "-bizarrekernel-ksunext"
                     - variant: "ksu-susfs"
                       kernelsu: "ksu"
                       susfs: "true"
                       permissive: "false"
+                      localversion: "-bizarrekernel-ksu+susfs"
                     - variant: "ksunext-susfs"
                       kernelsu: "ksunext"
                       susfs: "true"
                       permissive: "false"
+                      localversion: "-bizarrekernel-ksunext+susfs"
         env:
-            BUILD_LOCALVERSION: -Bizarre-${{ matrix.variant }}
+            BUILD_LOCALVERSION: ${{ matrix.localversion }}
 
         steps:
             - name: Free disk space
@@ -215,8 +221,10 @@ jobs:
                       --disable CONFIG_KSU_SUSFS_SUS_SU
                   fi
 
-                  # Disable auto local version to prevent -dirty suffix
+                   # Disable auto local version to prevent -dirty suffix
                   ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_LOCALVERSION_AUTO
+                  # Set custom LOCALVERSION
+                  ./scripts/config --file arch/arm64/configs/custom.config --set-str CONFIG_LOCALVERSION "${{ env.BUILD_LOCALVERSION }}"
 
                   # TMPFS XATTR is always enabled (mountify)
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_TMPFS_XATTR
@@ -238,7 +246,7 @@ jobs:
                   export PLATFORM_VERSION=16
                   export TARGET_SOC=s5e8835
 
-                  MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
+                  MAKE_PARAMS="-j$(nproc --all) ARCH=arm64 KBUILD_OUTPUT=$GITHUB_WORKSPACE/out CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- LOCALVERSION="
 
                   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
                   echo "🏗️  Starting Bizarre Kernel build"
