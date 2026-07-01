@@ -140,13 +140,18 @@ jobs:
                   fi
 
                   echo "[+] Replacing KSU symlink with physical copy to fix docker mount and inject version..."
-                  KSU_GIT_VERSION=$(cd KernelSU && git rev-list --count HEAD)
+                  if [[ -d "KernelSU-Next" ]]; then
+                    KSU_DIR="KernelSU-Next"
+                  else
+                    KSU_DIR="KernelSU"
+                  fi
+                  KSU_GIT_VERSION=$(cd "$KSU_DIR" && git rev-list --count HEAD)
                   KSU_VERSION=$(expr 30000 + $KSU_GIT_VERSION)
                   echo "[+] Calculated KSU version code: $KSU_VERSION"
                   rm -rf drivers/kernelsu
-                  cp -R KernelSU/kernel drivers/kernelsu
+                  cp -R "$KSU_DIR/kernel" drivers/kernelsu
                   rm -f drivers/kernelsu/include/uapi
-                  cp -R KernelSU/uapi drivers/kernelsu/include/uapi
+                  cp -R "$KSU_DIR/uapi" drivers/kernelsu/include/uapi
                   sed -i "s|ccflags-y += -DKSU_VERSION=16|ccflags-y += -DKSU_VERSION=$KSU_VERSION|" drivers/kernelsu/Kbuild
                   echo "✅ KSU setup complete"
 
@@ -286,16 +291,13 @@ jobs:
                   set -euo pipefail
                   OUT=$GITHUB_WORKSPACE/out/arch/arm64/boot
 
-                  echo "⬇️  Downloading mkdtboimg.py tool from AOSP..."
-                  python3 -c "import urllib.request, base64; url = 'https://android.googlesource.com/platform/system/libufdt/+/refs/heads/main/utils/src/mkdtboimg.py?format=TEXT'; data = urllib.request.urlopen(url).read(); open('mkdtboimg.py', 'wb').write(base64.b64decode(data))"
-
                   echo "📦 Packing M35x DTBOs..."
-                  python3 mkdtboimg.py create \
+                  python3 scripts/mkdtboimg.py create \
                     dtbo-m35x.img \
                     $(ls $OUT/dts/samsung/m35x/*.dtbo | sort)
 
                   echo "📦 Packing A35x DTBOs..."
-                  python3 mkdtboimg.py create \
+                  python3 scripts/mkdtboimg.py create \
                     dtbo-a35x.img \
                     $(ls $OUT/dts/samsung/a35x/*.dtbo | sort)
 
