@@ -13,16 +13,6 @@ on:
                 required: false
                 default: false
                 type: boolean
-            enable_bbrv3:
-                description: "Enable BBRv3 TCP congestion control"
-                required: false
-                default: true
-                type: boolean
-            enable_zeromount:
-                description: "Enable ZeroMount path redirection (all variants)"
-                required: false
-                default: true
-                type: boolean
 
 permissions:
     contents: write
@@ -51,32 +41,26 @@ jobs:
                       kernelsu: "none"
                       susfs: "false"
                       permissive: "false"
-                      zeromount: "true"
                     - variant: "permissive"
                       kernelsu: "none"
                       susfs: "false"
                       permissive: "true"
-                      zeromount: "true"
                     - variant: "ksu"
                       kernelsu: "ksu"
                       susfs: "false"
                       permissive: "false"
-                      zeromount: "true"
                     - variant: "ksunext"
                       kernelsu: "ksunext"
                       susfs: "false"
                       permissive: "false"
-                      zeromount: "true"
                     - variant: "ksu-susfs"
                       kernelsu: "ksu"
                       susfs: "true"
                       permissive: "false"
-                      zeromount: "true"
                     - variant: "ksunext-susfs"
                       kernelsu: "ksunext"
                       susfs: "true"
                       permissive: "false"
-                      zeromount: "true"
         env:
             BUILD_LOCALVERSION: -Bizarre-${{ matrix.variant }}
 
@@ -139,15 +123,26 @@ jobs:
                       curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s dev-susfs
                       echo "✅ KernelSU-Next (pershoot dev-susfs) driver ready"
                     else
-                      echo "🔧 Integrating KernelSU Next (rifsxd next)..."
-                      curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-                      echo "✅ KernelSU-Next driver ready"
+                      echo "🔧 Integrating KernelSU Next (pershoot next)..."
+                      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+                      echo "✅ KernelSU-Next (pershoot next) driver ready"
                     fi
                   else
                     echo "🔧 Integrating KernelSU (tiann - stable)..."
                     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
                     echo "✅ KernelSU driver ready"
                   fi
+
+                  echo "[+] Replacing KSU symlink with physical copy to fix docker mount and inject version..."
+                  KSU_GIT_VERSION=$(cd KernelSU && git rev-list --count HEAD)
+                  KSU_VERSION=$(expr 30000 + $KSU_GIT_VERSION)
+                  echo "[+] Calculated KSU version code: $KSU_VERSION"
+                  rm -rf drivers/kernelsu
+                  cp -R KernelSU/kernel drivers/kernelsu
+                  rm -f drivers/kernelsu/include/uapi
+                  cp -R KernelSU/uapi drivers/kernelsu/include/uapi
+                  sed -i "s|ccflags-y += -DKSU_VERSION=16|ccflags-y += -DKSU_VERSION=$KSU_VERSION|" drivers/kernelsu/Kbuild
+                  echo "✅ KSU setup complete"
 
             - name: Apply SUSFS patches
               if: matrix.susfs == 'true'
@@ -183,95 +178,6 @@ jobs:
 
                   find . -name '*.rej' -delete 2>/dev/null || true
                   echo "✅ SUSFS patches applied cleanly"
-
-            - name: Add NTSYNC
-              run: |
-                  set -euo pipefail
-                  cd "$GITHUB_WORKSPACE"
-                  echo "🩹 Applying NTSYNC..."
-                  # NTSYNC is always applied from WildKernels patches repository
-                  git clone --depth=1 https://github.com/WildKernels/kernel_patches.git "$HOME/kernel_patches"
-                  patch -p1 < "$HOME/kernel_patches/common/ntsync/ntsync_base.patch" || true
-                  patch -p1 < "$HOME/kernel_patches/common/ntsync/ntsync_compat_android13-5.15.patch" || true
-                  echo "✅ NTSYNC applied"
-
-            - name: Add BBRv3
-              if: github.event.inputs.enable_bbrv3 != 'false'
-              run: |
-                  set -euo pipefail
-                  cd "$GITHUB_WORKSPACE"
-                  echo "⚙️ Applying BBRv3 from local patch..."
-                  patch -p1 < scripts/patches/kernel/0002-bbrv3-android13-5.15.patch || true
-                  echo "✅ BBRv3 applied"
-
-            - name: Apply Zeromount patch
-              if: matrix.zeromount == 'true' && github.event.inputs.enable_zeromount != 'false'
-              run: |
-                  set -euo pipefail
-                  ZB="$HOME/Super-Builders"
-                  ZM_PATCH="$ZB/android13-5.15/WildKSU/patches/60_zeromount-android13-5.15.patch"
-
-                  echo "⬇️  Cloning Super-Builders..."
-                  rm -rf "$ZB"
-                  git clone --depth=1 https://github.com/jimsterino98/Super-Builders.git "$ZB"
-                  if [[ ! -f "$ZM_PATCH" ]]; then
-                    echo "ERROR: Zeromount patch not found: $ZM_PATCH" >&2
-                    exit 1
-                  fi
-
-                  cd "$GITHUB_WORKSPACE"
-                  echo "🩹 Applying Zeromount patch..."
-                  cp "$ZM_PATCH" ./60_zeromount-android13-5.15.patch
-                  patch -p1 < 60_zeromount-android13-5.15.patch || true
-                  rm -f 60_zeromount-android13-5.15.patch
-
-                  # Fix fs/namei.c — inject zeromount.h include if patch hunk failed
-                  if ! grep -q 'zeromount.h' fs/namei.c; then
-                    echo "🔧 Injecting zeromount.h include into fs/namei.c..."
-                    sed -i '/#include "internal.h"/i #ifdef CONFIG_ZEROMOUNT\n#include <linux/zeromount.h>\n#endif' fs/namei.c
-                  fi
-
-                  if [[ -f fs/proc/task_mmu.c ]] && ! grep -q 'zeromount_spoof_mmap_metadata' fs/proc/task_mmu.c; then
-                    echo "🔧 Fixing fs/proc/task_mmu.c..."
-                    _zm_task_mmu=$(mktemp)
-                    printf '%s\n' \
-                      '#ifdef CONFIG_ZEROMOUNT' \
-                      $'\tzeromount_spoof_mmap_metadata(inode, &dev, &ino);' \
-                      '#endif' > "$_zm_task_mmu"
-                    sed -i "/pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;/r $_zm_task_mmu" fs/proc/task_mmu.c
-                    rm -f "$_zm_task_mmu"
-
-                    _zm_include=$(mktemp)
-                    printf '%s\n' \
-                      '#ifdef CONFIG_ZEROMOUNT' \
-                      '#include <linux/zeromount.h>' \
-                      '#endif' > "$_zm_include"
-                    sed -i "/#include <linux\/pagewalk.h>/r $_zm_include" fs/proc/task_mmu.c
-                    rm -f "$_zm_include"
-                  fi
-
-                  # Fix readdir.c — remove orphaned zm_out: labels when goto zm_out is missing
-                  if grep -q 'zm_out:' fs/readdir.c && ! grep -q 'goto zm_out' fs/readdir.c; then
-                    echo "🔧 Removing orphaned zm_out: labels from fs/readdir.c..."
-                    perl -0pi -e 's/#ifdef CONFIG_ZEROMOUNT\nzm_out:\n#endif\n//g' fs/readdir.c
-                  fi
-
-                  # Fix stat.c — remove orphaned zm_out: labels similarly
-                  if grep -q 'zm_out:' fs/stat.c && ! grep -q 'goto zm_out' fs/stat.c; then
-                    echo "🔧 Removing orphaned zm_out: labels from fs/stat.c..."
-                    perl -0pi -e 's/#ifdef CONFIG_ZEROMOUNT\nzm_out:\n#endif\n//g' fs/stat.c
-                  fi
-
-                  if [[ -f fs/Kconfig.rej ]]; then
-                    echo "🔧 Fixing fs/Kconfig..."
-                    if ! grep -q '^config ZEROMOUNT$' fs/Kconfig; then
-                      perl -0pi -e 's@(config IO_WQ\n\tbool\n)@\1\nconfig ZEROMOUNT\n\tbool "ZeroMount Path Redirection Subsystem"\n\tdefault y\n\thelp\n\t  ZeroMount allows path redirection and virtual file injection\n\t  without mounting filesystems.\n\n@' fs/Kconfig
-                    fi
-                    rm -f fs/Kconfig.rej
-                  fi
-
-                  rm -f fs/namei.c.rej fs/readdir.c.rej fs/stat.c.rej fs/proc/task_mmu.c.rej 2>/dev/null || true
-                  echo "✅ Zeromount applied"
 
             - name: Configure build options
               run: |
@@ -309,25 +215,8 @@ jobs:
                       --disable CONFIG_KSU_SUSFS_SUS_SU
                   fi
 
-                  # NTSYNC is always enabled
-                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_NTSYNC
-
-                  # BBRv3 — enabled unless disabled via input
-                  if [[ "${{ github.event.inputs.enable_bbrv3 }}" != "false" ]]; then
-                    echo "⚙️ Enabling BBRv3..."
-                    ./scripts/config --file arch/arm64/configs/custom.config \
-                      --enable CONFIG_TCP_CONG_ADVANCED \
-                      --enable CONFIG_TCP_CONG_BBR \
-                      --enable CONFIG_TCP_CONG_BBR3 \
-                      --enable CONFIG_TCP_CONG_CUBIC \
-                      --enable CONFIG_DEFAULT_CUBIC \
-                      --enable CONFIG_NET_SCH_FQ
-                  fi
-
-                  if [[ "${{ matrix.zeromount }}" == "true" && "${{ github.event.inputs.enable_zeromount }}" != "false" ]]; then
-                    echo "⚙️ Enabling Zeromount..."
-                    ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZEROMOUNT
-                  fi
+                  # Disable auto local version to prevent -dirty suffix
+                  ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_LOCALVERSION_AUTO
 
                   # TMPFS XATTR is always enabled (mountify)
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_TMPFS_XATTR
