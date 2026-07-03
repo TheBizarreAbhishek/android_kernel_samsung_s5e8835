@@ -598,7 +598,7 @@ static int xhci_alloc_segments_for_ring_uram(struct xhci_hcd *xhci,
 	bool chain_links;
 
 	/* Set chain bit for 0.95 hosts, and for isoc rings on AMD 0.96 host */
-	chain_links = xhci_link_chain_quirk(xhci, type);
+	chain_links = ! !(xhci_link_trb_quirk(xhci) || (type == TYPE_ISOC && (xhci->quirks & XHCI_AMD_0x96_HOST)));
 
 	if (type == TYPE_ISOC) {
 		prev = xhci_segment_alloc_uram_ep(xhci, cycle_state, max_packet, flags, 0, endpoint_type);
@@ -744,14 +744,6 @@ int xhci_exynos_audio_init(struct device *parent, struct platform_device *pdev)
 {
 	int			ret;
 	int			value;
-
-	if (!g_xhci_exynos_audio) {
-		ret = xhci_exynos_audio_alloc(parent);
-		if (ret < 0) {
-			dev_err(&pdev->dev, "Failed to allocate xhci_exynos_audio\n");
-			return ret;
-		}
-	}
 
 	ret = of_property_read_u32(parent->of_node,
 				"xhci_use_uram_for_audio", &value);

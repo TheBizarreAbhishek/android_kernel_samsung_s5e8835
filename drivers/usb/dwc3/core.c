@@ -24,7 +24,6 @@
 #include <linux/dma-mapping.h>
 #include <linux/of.h>
 #include <linux/acpi.h>
-#include <linux/pci.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/reset.h>
 
@@ -38,9 +37,7 @@
 #include "io.h"
 
 #include "debug.h"
-#ifdef CONFIG_USB_XHCI_EXYNOS_AUDIO
 #include "../host/xhci-exynos-audio.h"
-#endif
 
 #define DWC3_DEFAULT_AUTOSUSPEND_DELAY	5000 /* ms */
 
@@ -190,7 +187,9 @@ static void __dwc3_set_mode(struct work_struct *work)
 	case DWC3_GCTL_PRTCAP_OTG:
 		dwc3_otg_exit(dwc);
 		spin_lock_irqsave(&dwc->lock, flags);
+		dwc3_lock_logging(DWC3_SET_MODE_FUNC, 1);
 		dwc->desired_otg_role = DWC3_OTG_ROLE_IDLE;
+		dwc3_lock_logging(DWC3_SET_MODE_FUNC, 0);
 		spin_unlock_irqrestore(&dwc->lock, flags);
 		dwc3_otg_update(dwc, 1);
 		break;
@@ -223,9 +222,11 @@ static void __dwc3_set_mode(struct work_struct *work)
 	}
 
 	spin_lock_irqsave(&dwc->lock, flags);
+	dwc3_lock_logging(DWC3_SET_MODE_FUNC, 1);
 
 	dwc3_set_prtcap(dwc, desired_dr_role, false);
 
+	dwc3_lock_logging(DWC3_SET_MODE_FUNC, 0);
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
 	switch (desired_dr_role) {
@@ -281,7 +282,9 @@ void dwc3_set_mode(struct dwc3 *dwc, u32 mode)
 		return;
 
 	spin_lock_irqsave(&dwc->lock, flags);
+	dwc3_lock_logging(DWC3_DRD_SET_MODE_FUNC, 1);
 	dwc->desired_dr_role = mode;
+	dwc3_lock_logging(DWC3_DRD_SET_MODE_FUNC, 0);
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
 	queue_work(system_freezable_wq, &dwc->drd_work);
@@ -310,6 +313,7 @@ int dwc3_core_soft_reset(struct dwc3 *dwc)
 	u32		reg;
 	int		retries = 1000;
 
+	pr_info("%s +++\n", __func__);
 	/*
 	 * We're resetting only the device side because, if we're in host mode,
 	 * XHCI driver will reset the host block. If dwc3 was configured for
@@ -354,6 +358,8 @@ done:
 	 */
 	if (DWC3_VER_IS_WITHIN(DWC31, ANY, 180A))
 		msleep(50);
+
+	pr_info("%s ---\n", __func__);
 
 	return 0;
 }
@@ -782,8 +788,6 @@ static bool dwc3_core_is_valid(struct dwc3 *dwc)
 
 	reg = dwc3_readl(dwc->regs, DWC3_GSNPSID);
 	dwc->ip = DWC3_GSNPS_ID(reg);
-	if (dwc->ip == DWC4_IP)
-		dwc->ip = DWC32_IP;
 
 	/* This should read as U3 followed by revision number */
 	if (DWC3_IP_IS(DWC3)) {
@@ -1712,7 +1716,7 @@ static int dwc3_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, dwc);
 	dwc3_cache_hwparams(dwc);
 
-	if (!dev_is_pci(dwc->sysdev) &&
+	if (!dwc->sysdev_is_parent &&
 	    DWC3_GHWPARAMS0_AWIDTH(dwc->hwparams.hwparams0) == 64) {
 		ret = dma_set_mask_and_coherent(dwc->sysdev, DMA_BIT_MASK(64));
 		if (ret)
@@ -1758,15 +1762,15 @@ static int dwc3_probe(struct platform_device *pdev)
 	if (ret)
 		goto err5;
 
-#ifdef CONFIG_USB_XHCI_EXYNOS_AUDIO
 	ret = xhci_exynos_audio_alloc(dev);
 	if (ret < 0)
 		dev_err(dev, "xhci_exynos_audio_alloc failed\n");
-#endif
 
 	pm_runtime_put(dev);
 
 	dma_set_max_seg_size(dev, UINT_MAX);
+
+	pr_info("%s ---\n", __func__);
 
 	return 0;
 
@@ -1869,15 +1873,12 @@ assert_reset:
 static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 {
 	u32 reg;
-	int ret;
 
 	switch (dwc->current_dr_role) {
 	case DWC3_GCTL_PRTCAP_DEVICE:
 		if (pm_runtime_suspended(dwc->dev))
 			break;
-		ret = dwc3_gadget_suspend(dwc);
-		if (ret)
-			return ret;
+		dwc3_gadget_suspend(dwc);
 		synchronize_irq(dwc->irq_gadget);
 		dwc3_core_exit(dwc);
 		break;
@@ -1908,9 +1909,9 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 			break;
 
 		if (dwc->current_otg_role == DWC3_OTG_ROLE_DEVICE) {
-			ret = dwc3_gadget_suspend(dwc);
-			if (ret)
-				return ret;
+			dwc3_lock_logging(DWC3_SUSPEND_COMM_FUNC, 1);
+			dwc3_gadget_suspend(dwc);
+			dwc3_lock_logging(DWC3_SUSPEND_COMM_FUNC, 0);
 			synchronize_irq(dwc->irq_gadget);
 		}
 
@@ -1975,7 +1976,9 @@ static int dwc3_resume_common(struct dwc3 *dwc, pm_message_t msg)
 		if (dwc->current_otg_role == DWC3_OTG_ROLE_HOST) {
 			dwc3_otg_host_init(dwc);
 		} else if (dwc->current_otg_role == DWC3_OTG_ROLE_DEVICE) {
+			dwc3_lock_logging(DWC3_RESUME_COMM_FUNC, 1);
 			dwc3_gadget_resume(dwc);
+			dwc3_lock_logging(DWC3_RESUME_COMM_FUNC, 0);
 		}
 
 		break;
@@ -2008,6 +2011,8 @@ static int dwc3_runtime_suspend(struct device *dev)
 	struct dwc3     *dwc = dev_get_drvdata(dev);
 	int		ret;
 
+	pr_info("%s +++\n", __func__);
+
 	if (dwc3_runtime_checks(dwc))
 		return -EBUSY;
 
@@ -2016,6 +2021,7 @@ static int dwc3_runtime_suspend(struct device *dev)
 		return ret;
 
 	device_init_wakeup(dev, true);
+	pr_info("%s ---\n", __func__);
 
 	return 0;
 }
@@ -2025,6 +2031,7 @@ static int dwc3_runtime_resume(struct device *dev)
 	struct dwc3     *dwc = dev_get_drvdata(dev);
 	int		ret;
 
+	pr_info("%s +++\n", __func__);
 	device_init_wakeup(dev, false);
 
 	ret = dwc3_resume_common(dwc, PMSG_AUTO_RESUME);
@@ -2047,6 +2054,7 @@ static int dwc3_runtime_resume(struct device *dev)
 
 	pm_runtime_mark_last_busy(dev);
 
+	pr_info("%s ---\n", __func__);
 	return 0;
 }
 
@@ -2054,6 +2062,7 @@ static int dwc3_runtime_idle(struct device *dev)
 {
 	struct dwc3     *dwc = dev_get_drvdata(dev);
 
+	pr_info("%s +++\n", __func__);
 	switch (dwc->current_dr_role) {
 	case DWC3_GCTL_PRTCAP_DEVICE:
 		if (dwc3_runtime_checks(dwc))
@@ -2068,6 +2077,7 @@ static int dwc3_runtime_idle(struct device *dev)
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_autosuspend(dev);
 
+	pr_info("%s ---\n", __func__);
 	return 0;
 }
 #endif /* CONFIG_PM */
@@ -2078,12 +2088,14 @@ static int dwc3_suspend(struct device *dev)
 	struct dwc3	*dwc = dev_get_drvdata(dev);
 	int		ret;
 
+	pr_info("%s +++\n", __func__);
 	ret = dwc3_suspend_common(dwc, PMSG_SUSPEND);
 	if (ret)
 		return ret;
 
 	pinctrl_pm_select_sleep_state(dev);
 
+	pr_info("%s ---\n", __func__);
 	return 0;
 }
 
@@ -2092,6 +2104,7 @@ static int dwc3_resume(struct device *dev)
 	struct dwc3	*dwc = dev_get_drvdata(dev);
 	int		ret;
 
+	pr_info("%s +++\n", __func__);
 	pinctrl_pm_select_default_state(dev);
 
 	ret = dwc3_resume_common(dwc, PMSG_RESUME);
@@ -2102,6 +2115,7 @@ static int dwc3_resume(struct device *dev)
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
 
+	pr_info("%s ---\n", __func__);
 	return 0;
 }
 

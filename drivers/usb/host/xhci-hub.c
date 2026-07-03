@@ -720,7 +720,8 @@ static int xhci_enter_test_mode(struct xhci_hcd *xhci,
 		if (!xhci->devs[i])
 			continue;
 
-		retval = xhci_disable_and_free_slot(xhci, i);
+		retval = xhci_disable_slot(xhci, i);
+		xhci_free_virt_device(xhci, i);
 		if (retval)
 			xhci_err(xhci, "Failed to disable slot %d, %d. Enter test mode anyway\n",
 				 i, retval);
@@ -1821,7 +1822,7 @@ retry:
 		main_hcd = 0;
 
 	pr_info("%s\n", __func__);
-	if (!(xhci->xhc_state & XHCI_STATE_REMOVING) && g_xhci_exynos_audio)
+	if (!(xhci->xhc_state & XHCI_STATE_REMOVING))
 		phy_set_mode_ext(g_xhci_exynos_audio->phy,
 				 PHY_MODE_BUS_SUSPEND, main_hcd);
 
@@ -1977,7 +1978,7 @@ int xhci_bus_resume(struct usb_hcd *hcd)
 		main_hcd = 0;
 
 	pr_info("%s\n", __func__);
-	if (!(xhci->xhc_state & XHCI_STATE_REMOVING) && g_xhci_exynos_audio)
+	if (!(xhci->xhc_state & XHCI_STATE_REMOVING))
 		phy_set_mode_ext(g_xhci_exynos_audio->phy,
 				 PHY_MODE_BUS_RESUME, main_hcd);
 

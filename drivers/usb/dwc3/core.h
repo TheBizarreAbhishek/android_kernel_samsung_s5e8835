@@ -1234,7 +1234,6 @@ struct dwc3 {
 #define DWC3_IP			0x5533
 #define DWC31_IP		0x3331
 #define DWC32_IP		0x3332
-#define DWC4_IP			0x3430
 
 	u32			revision;
 
@@ -1619,7 +1618,6 @@ int dwc3_send_gadget_ep_cmd(struct dwc3_ep *dep, unsigned int cmd,
 int dwc3_send_gadget_generic_command(struct dwc3 *dwc, unsigned int cmd,
 		u32 param);
 void dwc3_gadget_clear_tx_fifos(struct dwc3 *dwc);
-void dwc3_remove_requests(struct dwc3 *dwc, struct dwc3_ep *dep, int status);
 void dwc3_lock_logging(int function_num, int lock);
 #else
 static inline int dwc3_gadget_init(struct dwc3 *dwc)
