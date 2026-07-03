@@ -192,14 +192,16 @@ jobs:
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                  # uapi may be a symlink or directory — use rm -rf to handle both
-                  rm -rf drivers/kernelsu/include/uapi
+                  # uapi may be a symlink or directory — use rm -rf to handle both; || true if not present
+                  rm -rf drivers/kernelsu/include/uapi || true
                   cp -R "$KSU_DIR/uapi" drivers/kernelsu/include/uapi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory
                   # Create a dummy marker so the submodule check passes without a real git repo
                   if [[ "${{ matrix.kernelsu }}" == "resukisu" ]]; then
                     # KSU_SRC = drivers/kernelsu, check is: test -e $(KSU_SRC)/../.git = drivers/.git
                     git init drivers/kernelsu
+                    git -C drivers/kernelsu config user.email "ci@build.local"
+                    git -C drivers/kernelsu config user.name "CI"
                     git -C drivers/kernelsu commit --allow-empty -m "init" --no-gpg-sign
                     # Also create drivers/.git so the Kbuild parent-dir check passes
                     touch drivers/.git
