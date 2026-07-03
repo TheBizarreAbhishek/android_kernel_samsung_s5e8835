@@ -2612,7 +2612,14 @@ struct usb_hcd *__usb_create_hcd(const struct hc_driver *driver,
 
 		if (!strcmp("xhci-hcd", driver->description)) {
 			dev_info(dev, "xhci-hcd detected\n");
-			g_xhci_exynos_audio->hcd = hcd;
+#ifdef CONFIG_USB_XHCI_EXYNOS_AUDIO
+			if (!g_xhci_exynos_audio && dev->parent) {
+				extern int xhci_exynos_audio_alloc(struct device *parent);
+				xhci_exynos_audio_alloc(dev->parent);
+			}
+#endif
+			if (g_xhci_exynos_audio)
+				g_xhci_exynos_audio->hcd = hcd;
 		}
 	} else {
 		mutex_lock(&usb_port_peer_mutex);
@@ -2630,10 +2637,12 @@ struct usb_hcd *__usb_create_hcd(const struct hc_driver *driver,
 			xhci_exynos_audio_init(dev->parent, pdev);
 
 			/* Get USB2.0 PHY for main hcd */
-			g_xhci_exynos_audio->phy = devm_phy_get(dev->parent, "usb2-phy");
-			if (IS_ERR_OR_NULL(g_xhci_exynos_audio->phy)) {
-				g_xhci_exynos_audio->phy = NULL;
-				dev_err(dev, "%s: failed to get phy\n", __func__);
+			if (g_xhci_exynos_audio) {
+				g_xhci_exynos_audio->phy = devm_phy_get(dev->parent, "usb2-phy");
+				if (IS_ERR_OR_NULL(g_xhci_exynos_audio->phy)) {
+					g_xhci_exynos_audio->phy = NULL;
+					dev_err(dev, "%s: failed to get phy\n", __func__);
+				}
 			}
 		}
 	}
