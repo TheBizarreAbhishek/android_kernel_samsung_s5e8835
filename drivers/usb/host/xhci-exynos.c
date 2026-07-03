@@ -194,10 +194,10 @@ static int xhci_exynos_check_port(struct usb_device *dev, bool on)
 		dev_dbg(ddev, "%s, class = %d, speed = %d\n", __func__, udev->descriptor.bDeviceClass, udev->speed);
 		dev_dbg(ddev, "udev = 0x%8x, state = %d\n", udev, udev->state);
 		if (udev && udev->state == USB_STATE_CONFIGURED) {
-			if (!dev || !dev->config || !dev->config->interface || !dev->config->interface[0])
+			if (!dev || !dev->config || !dev->config->interface[0])
 				continue;
 
-			if (!udev->config || !udev->config->interface || !udev->config->interface[0])
+			if (!udev->config || !udev->config->interface[0])
 				continue;
 
 			bInterfaceClass = udev->config->interface[0]
@@ -834,7 +834,7 @@ static int xhci_exynos_probe(struct platform_device *pdev)
 
 	/* Set port_dev quirks for reduce port initialize time */
 	hdev = xhci->main_hcd->self.root_hub;
-	if (hdev && hdev->actconfig && hdev->actconfig->interface && hdev->actconfig->interface[0]) {
+	if (hdev && hdev->actconfig && hdev->actconfig->interface[0]) {
 		hub = usb_get_intfdata(hdev->actconfig->interface[0]);
 		if (hub && hub->ports) {
 			port_dev = hub->ports[0];
@@ -845,7 +845,7 @@ static int xhci_exynos_probe(struct platform_device *pdev)
 
 	/* Set port_dev quirks for reduce port initialize time */
 	hdev = xhci->shared_hcd->self.root_hub;
-	if (hdev && hdev->actconfig && hdev->actconfig->interface && hdev->actconfig->interface[0]) {
+	if (hdev && hdev->actconfig && hdev->actconfig->interface[0]) {
 		hub = usb_get_intfdata(hdev->actconfig->interface[0]);
 		if (hub && hub->ports) {
 			port_dev = hub->ports[0];
