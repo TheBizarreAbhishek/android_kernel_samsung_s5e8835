@@ -1426,7 +1426,7 @@ static int usb_suspend_both(struct usb_device *udev, pm_message_t msg)
 
 	hdev = udev->bus->root_hub;
 
-	if (!g_xhci_exynos_audio || !g_xhci_exynos_audio->hcd) {
+	if (!g_xhci_exynos_audio->hcd) {
 		pr_info("%s: hcd 0\n", __func__);
 		goto main;
 	}
@@ -1558,7 +1558,7 @@ static int usb_resume_both(struct usb_device *udev, pm_message_t msg)
 
 	hdev = udev->bus->root_hub;
 
-	if (!g_xhci_exynos_audio || !g_xhci_exynos_audio->hcd) {
+	if (!g_xhci_exynos_audio->hcd) {
 		pr_info("%s: hcd 0\n", __func__);
 		goto main;
 	}

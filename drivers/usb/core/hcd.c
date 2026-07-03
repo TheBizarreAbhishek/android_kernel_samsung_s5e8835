@@ -2183,7 +2183,7 @@ static struct urb *request_single_step_set_feature_urb(
 	urb->complete = usb_ehset_completion;
 	urb->status = -EINPROGRESS;
 	urb->actual_length = 0;
-	urb->transfer_flags = URB_DIR_IN | URB_NO_TRANSFER_DMA_MAP;
+	urb->transfer_flags = URB_DIR_IN;
 	usb_get_urb(urb);
 	atomic_inc(&urb->use_count);
 	atomic_inc(&urb->dev->urbnum);
@@ -2247,15 +2247,9 @@ int ehset_single_step_set_feature(struct usb_hcd *hcd, int port)
 
 	/* Complete remaining DATA and STATUS stages using the same URB */
 	urb->status = -EINPROGRESS;
-	urb->transfer_flags &= ~URB_NO_TRANSFER_DMA_MAP;
 	usb_get_urb(urb);
 	atomic_inc(&urb->use_count);
 	atomic_inc(&urb->dev->urbnum);
-	if (map_urb_for_dma(hcd, urb, GFP_KERNEL)) {
-		usb_put_urb(urb);
-		goto out1;
-	}
-
 	retval = hcd->driver->submit_single_step_set_feature(hcd, urb, 0);
 	if (!retval && !wait_for_completion_timeout(&done,
 						msecs_to_jiffies(2000))) {
@@ -2612,14 +2606,7 @@ struct usb_hcd *__usb_create_hcd(const struct hc_driver *driver,
 
 		if (!strcmp("xhci-hcd", driver->description)) {
 			dev_info(dev, "xhci-hcd detected\n");
-#ifdef CONFIG_USB_XHCI_EXYNOS_AUDIO
-			if (!g_xhci_exynos_audio && dev->parent) {
-				extern int xhci_exynos_audio_alloc(struct device *parent);
-				xhci_exynos_audio_alloc(dev->parent);
-			}
-#endif
-			if (g_xhci_exynos_audio)
-				g_xhci_exynos_audio->hcd = hcd;
+			g_xhci_exynos_audio->hcd = hcd;
 		}
 	} else {
 		mutex_lock(&usb_port_peer_mutex);
@@ -2637,12 +2624,10 @@ struct usb_hcd *__usb_create_hcd(const struct hc_driver *driver,
 			xhci_exynos_audio_init(dev->parent, pdev);
 
 			/* Get USB2.0 PHY for main hcd */
-			if (g_xhci_exynos_audio) {
-				g_xhci_exynos_audio->phy = devm_phy_get(dev->parent, "usb2-phy");
-				if (IS_ERR_OR_NULL(g_xhci_exynos_audio->phy)) {
-					g_xhci_exynos_audio->phy = NULL;
-					dev_err(dev, "%s: failed to get phy\n", __func__);
-				}
+			g_xhci_exynos_audio->phy = devm_phy_get(dev->parent, "usb2-phy");
+			if (IS_ERR_OR_NULL(g_xhci_exynos_audio->phy)) {
+				g_xhci_exynos_audio->phy = NULL;
+				dev_err(dev, "%s: failed to get phy\n", __func__);
 			}
 		}
 	}
