@@ -67,6 +67,26 @@ jobs:
                       susfs: "true"
                       permissive: "false"
                       localversion: "-bizarrekernel-ksunext+susfs"
+                    - variant: "resukisu"
+                      kernelsu: "resukisu"
+                      susfs: "false"
+                      permissive: "false"
+                      localversion: "-bizarrekernel-resukisu"
+                    - variant: "resukisu-susfs"
+                      kernelsu: "resukisu"
+                      susfs: "true"
+                      permissive: "false"
+                      localversion: "-bizarrekernel-resukisu+susfs"
+                    - variant: "sukisu-ultra"
+                      kernelsu: "sukisu-ultra"
+                      susfs: "false"
+                      permissive: "false"
+                      localversion: "-bizarrekernel-sukisu_ultra"
+                    - variant: "sukisu-ultra-susfs"
+                      kernelsu: "sukisu-ultra"
+                      susfs: "true"
+                      permissive: "false"
+                      localversion: "-bizarrekernel-sukisu_ultra+susfs"
         env:
             BUILD_LOCALVERSION: ${{ matrix.localversion }}
 
@@ -132,6 +152,20 @@ jobs:
                       echo "🔧 Integrating KernelSU Next (pershoot next)..."
                       curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s next
                       echo "✅ KernelSU-Next (pershoot next) driver ready"
+                    fi
+                  elif [[ "${{ matrix.kernelsu }}" == "resukisu" ]]; then
+                    echo "🔧 Integrating ReSukiSU..."
+                    curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash
+                    echo "✅ ReSukiSU driver ready"
+                  elif [[ "${{ matrix.kernelsu }}" == "sukisu-ultra" ]]; then
+                    if [[ "${{ matrix.susfs }}" == "true" ]]; then
+                      echo "🔧 Integrating SukiSU Ultra (builtin branch for SUSFS)..."
+                      curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s builtin
+                      echo "✅ SukiSU Ultra (builtin) driver ready"
+                    else
+                      echo "🔧 Integrating SukiSU Ultra (main branch)..."
+                      curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
+                      echo "✅ SukiSU Ultra (main) driver ready"
                     fi
                   else
                     echo "🔧 Integrating KernelSU (tiann - stable)..."
