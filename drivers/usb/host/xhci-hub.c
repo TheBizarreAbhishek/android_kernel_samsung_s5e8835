@@ -1821,7 +1821,7 @@ retry:
 		main_hcd = 0;
 
 	pr_info("%s\n", __func__);
-	if (!(xhci->xhc_state & XHCI_STATE_REMOVING))
+	if (!(xhci->xhc_state & XHCI_STATE_REMOVING) && g_xhci_exynos_audio)
 		phy_set_mode_ext(g_xhci_exynos_audio->phy,
 				 PHY_MODE_BUS_SUSPEND, main_hcd);
 
@@ -1977,7 +1977,7 @@ int xhci_bus_resume(struct usb_hcd *hcd)
 		main_hcd = 0;
 
 	pr_info("%s\n", __func__);
-	if (!(xhci->xhc_state & XHCI_STATE_REMOVING))
+	if (!(xhci->xhc_state & XHCI_STATE_REMOVING) && g_xhci_exynos_audio)
 		phy_set_mode_ext(g_xhci_exynos_audio->phy,
 				 PHY_MODE_BUS_RESUME, main_hcd);
 

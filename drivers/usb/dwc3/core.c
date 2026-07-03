@@ -38,6 +38,9 @@
 #include "io.h"
 
 #include "debug.h"
+#ifdef CONFIG_USB_XHCI_EXYNOS_AUDIO
+#include "../host/xhci-exynos-audio.h"
+#endif
 
 #define DWC3_DEFAULT_AUTOSUSPEND_DELAY	5000 /* ms */
 
@@ -1754,6 +1757,12 @@ static int dwc3_probe(struct platform_device *pdev)
 	ret = dwc3_core_init_mode(dwc);
 	if (ret)
 		goto err5;
+
+#ifdef CONFIG_USB_XHCI_EXYNOS_AUDIO
+	ret = xhci_exynos_audio_alloc(dev);
+	if (ret < 0)
+		dev_err(dev, "xhci_exynos_audio_alloc failed\n");
+#endif
 
 	pm_runtime_put(dev);
 
