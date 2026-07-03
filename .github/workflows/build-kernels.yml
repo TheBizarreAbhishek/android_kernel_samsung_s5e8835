@@ -194,6 +194,7 @@ jobs:
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
                   # uapi may be a symlink or directory — use rm -rf to handle both; || true if not present
                   rm -rf drivers/kernelsu/include/uapi || true
+                  mkdir -p drivers/kernelsu/include
                   cp -R "$KSU_DIR/uapi" drivers/kernelsu/include/uapi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory
                   # Create a dummy marker so the submodule check passes without a real git repo
