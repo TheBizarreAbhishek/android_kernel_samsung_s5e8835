@@ -192,12 +192,12 @@ jobs:
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                   # Only replace drivers/kernelsu/include/uapi if the root-level uapi contains files (not empty)
-                   if [[ -d "$KSU_DIR/uapi" && "$(ls -A "$KSU_DIR/uapi" 2>/dev/null)" ]]; then
-                     rm -rf drivers/kernelsu/include/uapi || true
-                     mkdir -p drivers/kernelsu/include
-                     cp -R "$KSU_DIR/uapi" drivers/kernelsu/include/uapi
-                   fi
+                    # Only replace drivers/kernelsu/include/uapi if the root-level uapi is a real directory (not a symlink) and contains files
+                    if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" && "$(ls -A "$KSU_DIR/uapi" 2>/dev/null)" ]]; then
+                      rm -rf drivers/kernelsu/include/uapi || true
+                      mkdir -p drivers/kernelsu/include
+                      cp -R "$KSU_DIR/uapi" drivers/kernelsu/include/uapi
+                    fi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory
                   # Create a dummy marker so the submodule check passes without a real git repo
                   if [[ "${{ matrix.kernelsu }}" == "resukisu" ]]; then
