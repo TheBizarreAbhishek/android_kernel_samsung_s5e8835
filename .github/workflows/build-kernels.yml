@@ -207,10 +207,14 @@ jobs:
                     # Also create drivers/.git so the Kbuild parent-dir check passes
                     touch drivers/.git
                   fi
-                  sed -i "s|ccflags-y += -DKSU_VERSION=16|ccflags-y += -DKSU_VERSION=$KSU_VERSION|g" drivers/kernelsu/Kbuild
-                  sed -i "s|KSU_VERSION_FALLBACK := [0-9][0-9]*|KSU_VERSION_FALLBACK := $KSU_VERSION|g" drivers/kernelsu/Kbuild
-                  sed -i "s|KSU_VERSION_TAG_FALLBACK := v0.0.1|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" drivers/kernelsu/Kbuild
-                  echo "✅ KSU setup complete"
+                  for kfile in drivers/kernelsu/Kbuild drivers/kernelsu/Makefile; do
+                     if [[ -f "$kfile" ]]; then
+                       sed -i "s|ccflags-y += -DKSU_VERSION=16|ccflags-y += -DKSU_VERSION=$KSU_VERSION|g" "$kfile" || true
+                       sed -i "s|KSU_VERSION_FALLBACK := [0-9][0-9]*|KSU_VERSION_FALLBACK := $KSU_VERSION|g" "$kfile" || true
+                       sed -i "s|KSU_VERSION_TAG_FALLBACK := v0.0.1|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" "$kfile" || true
+                     fi
+                   done
+                   echo "✅ KSU setup complete"
 
             - name: Apply SUSFS patches
               if: matrix.susfs == 'true'
