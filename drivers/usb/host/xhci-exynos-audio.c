@@ -745,6 +745,14 @@ int xhci_exynos_audio_init(struct device *parent, struct platform_device *pdev)
 	int			ret;
 	int			value;
 
+	if (!g_xhci_exynos_audio) {
+		ret = xhci_exynos_audio_alloc(parent);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to allocate xhci_exynos_audio\n");
+			return ret;
+		}
+	}
+
 	ret = of_property_read_u32(parent->of_node,
 				"xhci_use_uram_for_audio", &value);
 	if (ret == 0 && value == 1) {
