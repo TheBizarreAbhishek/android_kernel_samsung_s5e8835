@@ -859,12 +859,15 @@ static int xhci_exynos_probe(struct platform_device *pdev)
 	device_enable_async_suspend(&pdev->dev);
 	pm_runtime_put_noidle(&pdev->dev);
 
-	device_set_wakeup_enable(&xhci->main_hcd->self.root_hub->dev, 1);
+	if (xhci->main_hcd && xhci->main_hcd->self.root_hub)
+		device_set_wakeup_enable(&xhci->main_hcd->self.root_hub->dev, 1);
 
 #ifdef CONFIG_EXYNOS_USBDRD_PHY30
-	device_set_wakeup_enable(&xhci->shared_hcd->self.root_hub->dev, 1);
+	if (xhci->shared_hcd && xhci->shared_hcd->self.root_hub)
+		device_set_wakeup_enable(&xhci->shared_hcd->self.root_hub->dev, 1);
 #else
-	device_set_wakeup_enable(&xhci->shared_hcd->self.root_hub->dev, 0);
+	if (xhci->shared_hcd && xhci->shared_hcd->self.root_hub)
+		device_set_wakeup_enable(&xhci->shared_hcd->self.root_hub->dev, 0);
 #endif
 
 	/*
@@ -928,11 +931,11 @@ static int xhci_exynos_remove(struct platform_device *dev)
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	pr_info("%s\n", __func__);
 	/* In order to prevent kernel panic */
-	if (!pm_runtime_suspended(&xhci->shared_hcd->self.root_hub->dev)) {
+	if (xhci->shared_hcd && xhci->shared_hcd->self.root_hub && !pm_runtime_suspended(&xhci->shared_hcd->self.root_hub->dev)) {
 		pr_info("%s, shared_hcd pm_runtime_forbid\n", __func__);
 		pm_runtime_forbid(&xhci->shared_hcd->self.root_hub->dev);
 	}
-	if (!pm_runtime_suspended(&xhci->main_hcd->self.root_hub->dev)) {
+	if (xhci->main_hcd && xhci->main_hcd->self.root_hub && !pm_runtime_suspended(&xhci->main_hcd->self.root_hub->dev)) {
 		pr_info("%s, main_hcd pm_runtime_forbid\n", __func__);
 		pm_runtime_forbid(&xhci->main_hcd->self.root_hub->dev);
 	}
