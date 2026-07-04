@@ -370,6 +370,10 @@ jobs:
                   cp dtbo-m35x.img "$HOME/AnyKernel3/"
                   cp dtbo-a35x.img "$HOME/AnyKernel3/"
 
+                  # Copy all compiled kernel modules to AnyKernel3 systemless directory
+                  mkdir -p "$HOME/AnyKernel3/modules/vendor/lib/modules"
+                  find "$GITHUB_WORKSPACE/out" -name "*.ko" -print0 | xargs -0 -I {} cp {} "$HOME/AnyKernel3/modules/vendor/lib/modules/"
+
                   cd "$HOME/AnyKernel3"
                   7z a "$ZIP_NAME" . -xr'!*.git*' | tail -1
 
