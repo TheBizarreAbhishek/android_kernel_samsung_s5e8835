@@ -26,6 +26,19 @@ A highly optimized, customized GKI-compliant kernel for Samsung Galaxy M35 & A35
   * **Ralink:** `rt2800usb` (RT3070/RT5370)
 * **Systemless Dynamic Loading:** AnyKernel3 automatically packages modules into Magisk systemless overlays under `/vendor/lib/modules/` at flash time.
 * **USB HID Injection:** Full BadUSB keyboard/mouse injection support.
+
+### ⚡ Performance & Memory Optimizations
+* **ZRAM with ZSTD Compression:** Set default ZRAM compression algorithm to `zstd` for faster RAM compression, improving multitasking and reducing app reload lag.
+* **Reduced Overhead:** Disabled Samsung `SEC_DEBUG`, verbose ACPM power management logging, spurious IRQs logging, and block IO stats, reducing CPU overhead and eliminating boot/UI lag.
+* **Governor Support:** Enabled `ondemand` and `userspace` CPU scaling governors.
+
+### 🛡️ Samsung Security Bypasses & Stealth
+* **Knox Disabled:** Completely stripped proprietary Samsung Knox security subsystems (`DEFEX`, `PROCA`, `FIVE`, `DSMS`, `KPERFMON`) to allow root operations and arbitrary execution.
+* **GMS Stealth:** Stripped custom `localversion` suffix from `uname` to pass Google Mobile Services (GMS) Play Integrity and SafetyNet certifications.
+* **Hidden Configuration:** Disabled `/proc/config.gz` export to defeat root detectors checking kernel configs.
+
+### 🔌 Stability & USB Fixes
+* **USB Audio Offloading Fix:** Fixed a major Samsung kernel bug (NULL pointer dereference) in `xhci-exynos` audio allocation, ensuring rock-solid stability when using external USB DACs, soundcards, and USB OTG devices under stress.
 ---
 
 ## 📦 Build Matrix Variants
