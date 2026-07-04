@@ -424,15 +424,14 @@ jobs:
                       - KernelSU-Next: https://github.com/rifsxd/KernelSU-Next (matrix variants)
                       - KernelSU (tiann stable): https://github.com/tiann/KernelSU (matrix variants)
                       - SUSFS: https://gitlab.com/simonpunk/susfs4ksu
-                      - BBRv3 network TCP congestion control
-                      - NTSYNC support
+                      - Droidspace & Docker support (isolated namespaces, cgroups, System V IPC preserved)
+                      - NetHunter support (BadUSB HID injection & external Wi-Fi dynamic driver modules: ath9k_htc, rtl8187, rt2800usb)
                       - Unified kernel for both SM-M356B and SM-A356B
-                      - Android 16 / One UI 7
+                      - Android 16 / One UI 8.0 & 8.5
 
                       ### Flashing Instructions
                       1. Flash the zip via KernelSU Manager or any recovery
-                      2. Device is automatically detected — correct DTBO is flashed
-                      3. Reboot
+                      2. Reboot
 
                       ### Build information
                       - **Kernel:** android13-5.15 (LTS ${{ steps.date.outputs.DATE }})
