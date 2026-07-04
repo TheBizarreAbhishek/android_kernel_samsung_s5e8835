@@ -36,9 +36,6 @@ A highly optimized, customized GKI-compliant kernel for Samsung Galaxy M35 & A35
 * **Knox Disabled:** Completely stripped proprietary Samsung Knox security subsystems (`DEFEX`, `PROCA`, `FIVE`, `DSMS`, `KPERFMON`) to allow root operations and arbitrary execution.
 * **GMS Stealth:** Stripped custom `localversion` suffix from `uname` to pass Google Mobile Services (GMS) Play Integrity and SafetyNet certifications.
 * **Hidden Configuration:** Disabled `/proc/config.gz` export to defeat root detectors checking kernel configs.
-
-### 🔌 Stability & USB Fixes
-* **USB Audio Offloading Fix:** Fixed a major Samsung kernel bug (NULL pointer dereference) in `xhci-exynos` audio allocation, ensuring rock-solid stability when using external USB DACs, soundcards, and USB OTG devices under stress.
 ---
 
 ## 📦 Build Matrix Variants

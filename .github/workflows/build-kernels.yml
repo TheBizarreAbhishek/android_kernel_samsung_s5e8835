@@ -429,7 +429,6 @@ jobs:
                       - Knox Security Bypasses (stripped DEFEX, PROCA, FIVE, DSMS, KPERFMON)
                       - Memory Optimization: ZRAM default compression algorithm set to ZSTD
                       - Performance Tuning: Stripped Samsung SEC_DEBUG and ACPM log levels to eliminate boot/UI lag
-                      - USB Audio Fix: Fixed xhci-exynos NULL pointer crashes on USB Audio Offloading
                       - GMS Stealth: Stripped custom localversion and disabled proc/config.gz to pass Play Integrity
                       - Unified kernel for both SM-M356B and SM-A356B
                       - Android 16 / One UI 8.0 & 8.5
