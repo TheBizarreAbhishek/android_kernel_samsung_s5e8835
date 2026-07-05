@@ -22,7 +22,7 @@
 #define CALLSTACK_SIZE		4096
 #define MAX_CALL_ENTRY		128
 
-static char callstack_buf[CONFIG_VENDOR_NR_CPUS][CALLSTACK_SIZE];
+static char callstack_buf[NR_CPUS][CALLSTACK_SIZE];
 
 static void sshow_stack(char *s, size_t size, struct task_struct *tsk, unsigned long *sp, const char *loglvl)
 {
@@ -65,7 +65,7 @@ static int callback_cur_tasks(struct seq_file *dst)
 
 	smp_call_function(sshowacpu, NULL, 1);
 
-	for (i = 0; i < CONFIG_VENDOR_NR_CPUS; i++)
+	for (i = 0; i < NR_CPUS; i++)
 		seq_printf(dst, "%s\n", callstack_buf[i]);
 
 	return NOTIFY_DONE;

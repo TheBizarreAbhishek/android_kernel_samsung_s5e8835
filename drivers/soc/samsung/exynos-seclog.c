@@ -39,7 +39,7 @@
 
 static struct seclog_data ldata;
 static struct seclog_ctx slog_ctx;
-static struct sec_log_info *sec_log[CONFIG_VENDOR_NR_CPUS];
+static struct sec_log_info *sec_log[NR_CPUS];
 
 
 static void exynos_ldfw_error(struct platform_device *pdev,
@@ -116,7 +116,7 @@ static void exynos_seclog_worker(struct work_struct *work)
 	pr_debug("%s: Start seclog_worker\n", __func__);
 
 	/* Print log message in a message buffer */
-	for (cpu = 0; cpu < CONFIG_VENDOR_NR_CPUS; cpu++) {
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
 		v_log_addr = SECLOG_PHYS_TO_VIRT(sec_log[cpu]->initial_log_addr);
 		v_log_arr = (struct log_header_info *)v_log_addr;
 		tmp_read_cnt = sec_log[cpu]->log_read_cnt;
@@ -172,7 +172,7 @@ static irqreturn_t exynos_seclog_irq_handler(int irq, void *dev_id)
 		schedule_work(&slog_ctx.work);
 	} else {
 		/* Skip all log messages */
-		for (cpu = 0; cpu < CONFIG_VENDOR_NR_CPUS; cpu++) {
+		for (cpu = 0; cpu < NR_CPUS; cpu++) {
 			sec_log[cpu]->log_read_cnt = sec_log[cpu]->log_write_cnt;
 		}
 	}
@@ -315,7 +315,7 @@ static int exynos_seclog_probe(struct platform_device *pdev)
 
 detect_ldfw_err:
 	/* Setup virtual address of message buffer of each core */
-	for (i = 0; i < CONFIG_VENDOR_NR_CPUS; i++) {
+	for (i = 0; i < NR_CPUS; i++) {
 		sec_log[i] = (struct sec_log_info *)((unsigned long)ldata.virt_addr
 								+ (SECLOG_LOG_BUF_SIZE * i));
 		dev_dbg(&pdev->dev,

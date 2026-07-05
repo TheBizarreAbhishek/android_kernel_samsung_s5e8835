@@ -6,8 +6,12 @@
 //#define _NU_DBG
 
 #define BITS(_end, _start)          ((BIT(_end) - BIT(_start)) + BIT(_end))
+#ifndef MAX
 #define MAX(a, b)               ((a > b) ? (a):(b))
+#endif
+#ifndef MIN
 #define MIN(a, b)               ((a < b) ? (a):(b))
+#endif
 #define MASK2SHIFT(_mask)           __ffs(_mask)
 
 enum {
