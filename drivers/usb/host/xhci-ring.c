@@ -250,7 +250,9 @@ static void inc_enq(struct xhci_hcd *xhci, struct xhci_ring *ring,
 		 * AMD 0.96 host, carry over the chain bit of the previous TRB
 		 * (which may mean the chain bit is cleared).
 		 */
-		if (!xhci_link_chain_quirk(xhci, ring->type)) {
+		if (!(ring->type == TYPE_ISOC &&
+		      (xhci->quirks & XHCI_AMD_0x96_HOST)) &&
+		    !xhci_link_trb_quirk(xhci)) {
 			next->link.control &= cpu_to_le32(~TRB_CHAIN);
 			next->link.control |= cpu_to_le32(chain);
 		}
@@ -353,6 +355,9 @@ static void xhci_handle_stopped_cmd_ring(struct xhci_hcd *xhci,
 {
 	struct xhci_command *i_cmd;
 
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	xhci_info(xhci, "%s\n", __func__);
+#endif
 	/* Turn all aborted commands in list to no-ops, then restart */
 	list_for_each_entry(i_cmd, &xhci->cmd_list, cmd_list) {
 
@@ -360,10 +365,13 @@ static void xhci_handle_stopped_cmd_ring(struct xhci_hcd *xhci,
 			continue;
 
 		i_cmd->status = COMP_COMMAND_RING_STOPPED;
-
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+		xhci_info(xhci, "Turn aborted command %pK to no-op\n",
+			 i_cmd->command_trb);
+#else
 		xhci_dbg(xhci, "Turn aborted command %p to no-op\n",
 			 i_cmd->command_trb);
-
+#endif
 		trb_to_noop(i_cmd->command_trb, TRB_CMD_NOOP);
 
 		/*
@@ -377,6 +385,9 @@ static void xhci_handle_stopped_cmd_ring(struct xhci_hcd *xhci,
 	/* ring command ring doorbell to restart the command ring */
 	if ((xhci->cmd_ring->dequeue != xhci->cmd_ring->enqueue) &&
 	    !(xhci->xhc_state & XHCI_STATE_DYING)) {
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+		xhci_info(xhci, "xhci->xhc_state 0x%x\n", xhci->xhc_state);
+#endif
 		xhci->current_cmd = cur_cmd;
 		if (cur_cmd)
 			xhci_mod_cmd_timer(xhci, XHCI_CMD_DEFAULT_TIMEOUT);
@@ -392,7 +403,12 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci, unsigned long flags)
 	u64 crcr;
 	int ret;
 
+
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	xhci_info(xhci, "Abort command ring\n");
+#else
 	xhci_dbg(xhci, "Abort command ring\n");
+#endif
 
 	reinit_completion(&xhci->cmd_ring_stop_completion);
 
@@ -418,7 +434,11 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci, unsigned long flags)
 	 * and try to recover a -ETIMEDOUT with a host controller reset.
 	 */
 	ret = xhci_handshake(&xhci->op_regs->cmd_ring,
+#if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
+			CMD_RING_RUNNING, 0, 5 * 100 * 1000);
+#else
 			CMD_RING_RUNNING, 0, 5 * 1000 * 1000);
+#endif
 	if (ret < 0) {
 		xhci_err(xhci, "Abort failed to stop command ring: %d\n", ret);
 		xhci_halt(xhci);
@@ -436,7 +456,10 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci, unsigned long flags)
 					  msecs_to_jiffies(2000));
 	spin_lock_irqsave(&xhci->lock, flags);
 	if (!ret) {
-		xhci_dbg(xhci, "No stop event for abort, ring start fail?\n");
+		xhci_info(xhci, "No stop event for abort, ring start fail?\n");
+#if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
+			cancel_delayed_work(&xhci->cmd_timer);
+#endif
 		xhci_cleanup_command_queue(xhci);
 	} else {
 		xhci_handle_stopped_cmd_ring(xhci, xhci_next_queued_cmd(xhci));
@@ -889,7 +912,7 @@ static int xhci_reset_halted_ep(struct xhci_hcd *xhci, unsigned int slot_id,
 		goto done;
 	}
 
-	xhci_dbg(xhci, "%s-reset ep %u, slot %u\n",
+	xhci_info(xhci, "%s-reset ep %u, slot %u\n",
 		 (reset_type == EP_HARD_RESET) ? "Hard" : "Soft",
 		 ep_index, slot_id);
 
@@ -926,7 +949,7 @@ static int xhci_handle_halted_endpoint(struct xhci_hcd *xhci,
 	}
 
 	if (ep->ep_state & EP_HALTED) {
-		xhci_dbg(xhci, "Reset ep command for ep_index %d already pending\n",
+		xhci_info(xhci, "Reset ep command for ep_index %d already pending\n",
 			 ep->ep_index);
 		return 0;
 	}
@@ -1051,7 +1074,7 @@ static int xhci_invalidate_cancelled_tds(struct xhci_virt_ep *ep)
 			    td->cancel_status != TD_CLEARING_CACHE_DEFERRED)
 				continue;
 			xhci_warn(xhci, "Failed to clear cancelled cached URB %p, mark clear anyway\n",
-				  td->urb);
+				 td->urb);
 			td_to_noop(xhci, ring, td, false);
 			td->cancel_status = TD_CLEARED;
 		}
@@ -1111,7 +1134,7 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 	struct xhci_td *td = NULL;
 	enum xhci_ep_reset_type reset_type;
 	struct xhci_command *command;
-	int err;
+	int err, ep_ctx_rsvd;
 
 	if (unlikely(TRB_TO_SUSPEND_PORT(le32_to_cpu(trb->generic.field[3])))) {
 		if (!xhci->devs[slot_id])
@@ -1146,7 +1169,7 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 	 */
 		switch (GET_EP_CTX_STATE(ep_ctx)) {
 		case EP_STATE_HALTED:
-			xhci_dbg(xhci, "Stop ep completion raced with stall, reset ep\n");
+			xhci_info(xhci, "Stop ep completion raced with stall, reset ep\n");
 			if (ep->ep_state & EP_HAS_STREAMS) {
 				reset_type = EP_SOFT_RESET;
 			} else {
@@ -1173,7 +1196,20 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 			fallthrough;
 		case EP_STATE_RUNNING:
 			/* Race, HW handled stop ep cmd before ep was running */
-			xhci_dbg(xhci, "Stop ep completion ctx error, ep is running\n");
+			xhci_info(xhci, "Stop ep completion ctx error, ep is running\n");
+			ep_ctx_rsvd = CTX_TO_RESERVED(le32_to_cpu(ep_ctx->ep_info));
+			ep_ctx_rsvd++;
+			if (ep_ctx_rsvd > 10) {
+				/*
+				 * We don't want to stay in infinite loop.
+				 * We want to giveback all invalidated tds
+				 */
+				xhci_info(xhci, "EP keeps running state in EP stop, break\n");
+				break;
+			}
+			xhci_info(xhci, "EP state check count = %d\n", ep_ctx_rsvd);
+			ep_ctx->ep_info &= cpu_to_le32(~EP_RESERVED_MASK);
+			ep_ctx->ep_info |= cpu_to_le32(EP_RESERVED(ep_ctx_rsvd));
 
 			command = xhci_alloc_command(xhci, false, GFP_ATOMIC);
 			if (!command)
@@ -1196,6 +1232,7 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 	/* Otherwise ring the doorbell(s) to restart queued transfers */
 	xhci_giveback_invalidated_tds(ep);
 	ring_doorbell_for_active_rings(xhci, slot_id, ep_index);
+	xhci_info(xhci, "%s\n", __func__);
 }
 
 static void xhci_kill_ring_urbs(struct xhci_hcd *xhci, struct xhci_ring *ring)
@@ -1275,15 +1312,12 @@ static void xhci_kill_endpoint_urbs(struct xhci_hcd *xhci,
  */
 void xhci_hc_died(struct xhci_hcd *xhci)
 {
-	bool notify;
 	int i, j;
 
 	if (xhci->xhc_state & XHCI_STATE_DYING)
 		return;
 
-	notify = !(xhci->xhc_state & XHCI_STATE_REMOVING);
-	if (notify)
-		xhci_err(xhci, "xHCI host controller not responding, assume dead\n");
+	xhci_err(xhci, "xHCI host controller not responding, assume dead\n");
 	xhci->xhc_state |= XHCI_STATE_DYING;
 
 	xhci_cleanup_command_queue(xhci);
@@ -1297,7 +1331,7 @@ void xhci_hc_died(struct xhci_hcd *xhci)
 	}
 
 	/* inform usb core hc died if PCI remove isn't already handling it */
-	if (notify)
+	if (!(xhci->xhc_state & XHCI_STATE_REMOVING))
 		usb_hc_died(xhci_to_hcd(xhci));
 }
 
@@ -1525,9 +1559,9 @@ cleanup:
 		/* Start giving back any TDs invalidated above */
 		xhci_giveback_invalidated_tds(ep);
 	} else {
-		/* Restart any rings with pending URBs */
+	/* Restart any rings with pending URBs */
 		xhci_dbg(ep->xhci, "%s: All TDs cleared, ring doorbell\n", __func__);
-		ring_doorbell_for_active_rings(xhci, slot_id, ep_index);
+	ring_doorbell_for_active_rings(xhci, slot_id, ep_index);
 	}
 }
 
@@ -1576,8 +1610,7 @@ static void xhci_handle_cmd_enable_slot(struct xhci_hcd *xhci, int slot_id,
 		command->slot_id = 0;
 }
 
-static void xhci_handle_cmd_disable_slot(struct xhci_hcd *xhci, int slot_id,
-					u32 cmd_comp_code)
+static void xhci_handle_cmd_disable_slot(struct xhci_hcd *xhci, int slot_id)
 {
 	struct xhci_virt_device *virt_dev;
 	struct xhci_slot_ctx *slot_ctx;
@@ -1592,10 +1625,6 @@ static void xhci_handle_cmd_disable_slot(struct xhci_hcd *xhci, int slot_id,
 	if (xhci->quirks & XHCI_EP_LIMIT_QUIRK)
 		/* Delete default control endpoint resources */
 		xhci_free_device_endpoint_resources(xhci, virt_dev, true);
-	if (cmd_comp_code == COMP_SUCCESS) {
-		xhci->dcbaa->dev_context_ptrs[slot_id] = 0;
-		xhci->devs[slot_id] = NULL;
-	}
 }
 
 static void xhci_handle_cmd_config_ep(struct xhci_hcd *xhci, int slot_id,
@@ -1727,6 +1756,9 @@ void xhci_handle_command_timeout(struct work_struct *work)
 
 	xhci = container_of(to_delayed_work(work), struct xhci_hcd, cmd_timer);
 
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	xhci_info(xhci, "%s\n", __func__);
+#endif
 	spin_lock_irqsave(&xhci->lock, flags);
 
 	/*
@@ -1735,6 +1767,9 @@ void xhci_handle_command_timeout(struct work_struct *work)
 	 */
 	if (!xhci->current_cmd || delayed_work_pending(&xhci->cmd_timer)) {
 		spin_unlock_irqrestore(&xhci->lock, flags);
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+		xhci_err(xhci, "%s race condition\n", __func__);
+#endif
 		return;
 	}
 	/* mark this command to be cancelled */
@@ -1743,6 +1778,9 @@ void xhci_handle_command_timeout(struct work_struct *work)
 	/* Make sure command ring is running before aborting it */
 	hw_ring_state = xhci_read_64(xhci, &xhci->op_regs->cmd_ring);
 	if (hw_ring_state == ~(u64)0) {
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+		xhci_err(xhci, "%s no running\n", __func__);
+#endif
 		xhci_hc_died(xhci);
 		goto time_out_completed;
 	}
@@ -1751,14 +1789,22 @@ void xhci_handle_command_timeout(struct work_struct *work)
 	    (hw_ring_state & CMD_RING_RUNNING))  {
 		/* Prevent new doorbell, and start command abort */
 		xhci->cmd_ring_state = CMD_RING_STATE_ABORTED;
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+		xhci_info(xhci, "Command timeout\n");
+#else
 		xhci_dbg(xhci, "Command timeout\n");
+#endif
 		xhci_abort_cmd_ring(xhci, flags);
 		goto time_out_completed;
 	}
 
 	/* host removed. Bail out */
 	if (xhci->xhc_state & XHCI_STATE_REMOVING) {
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+		xhci_info(xhci, "host removed, ring start fail?\n");
+#else
 		xhci_dbg(xhci, "host removed, ring start fail?\n");
+#endif
 		xhci_cleanup_command_queue(xhci);
 
 		goto time_out_completed;
@@ -1770,6 +1816,9 @@ void xhci_handle_command_timeout(struct work_struct *work)
 
 time_out_completed:
 	spin_unlock_irqrestore(&xhci->lock, flags);
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+	xhci_info(xhci, "%s end\n", __func__);
+#endif
 	return;
 }
 
@@ -1835,6 +1884,9 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 		if (cmd->status == COMP_COMMAND_ABORTED) {
 			if (xhci->current_cmd == cmd)
 				xhci->current_cmd = NULL;
+#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
+			xhci_info(xhci, "%s command aborted.\n", __func__);
+#endif
 			goto event_handled;
 		}
 	}
@@ -1845,7 +1897,7 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 		xhci_handle_cmd_enable_slot(xhci, slot_id, cmd, cmd_comp_code);
 		break;
 	case TRB_DISABLE_SLOT:
-		xhci_handle_cmd_disable_slot(xhci, slot_id, cmd_comp_code);
+		xhci_handle_cmd_disable_slot(xhci, slot_id);
 		break;
 	case TRB_CONFIG_EP:
 		if (!cmd->completion)
@@ -3381,7 +3433,9 @@ static int prepare_ring(struct xhci_hcd *xhci, struct xhci_ring *ep_ring,
 		/* If we're not dealing with 0.95 hardware or isoc rings
 		 * on AMD 0.96 host, clear the chain bit.
 		 */
-		if (!xhci_link_chain_quirk(xhci, ep_ring->type))
+		if (!xhci_link_trb_quirk(xhci) &&
+		    !(ep_ring->type == TYPE_ISOC &&
+		      (xhci->quirks & XHCI_AMD_0x96_HOST)))
 			ep_ring->enqueue->link.control &=
 				cpu_to_le32(~TRB_CHAIN);
 		else
@@ -4445,8 +4499,7 @@ static int queue_command(struct xhci_hcd *xhci, struct xhci_command *cmd,
 
 	if ((xhci->xhc_state & XHCI_STATE_DYING) ||
 		(xhci->xhc_state & XHCI_STATE_HALTED)) {
-		xhci_dbg(xhci, "xHCI dying or halted, can't queue_command. state: 0x%x\n",
-			 xhci->xhc_state);
+		xhci_dbg(xhci, "xHCI dying or halted, can't queue_command\n");
 		return -ESHUTDOWN;
 	}
 

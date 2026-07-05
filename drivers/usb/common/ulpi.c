@@ -286,9 +286,10 @@ struct ulpi *ulpi_register_interface(struct device *dev,
 	ulpi->ops = ops;
 
 	ret = ulpi_register(dev, ulpi);
-	if (ret)
+	if (ret) {
+		kfree(ulpi);
 		return ERR_PTR(ret);
-
+	}
 
 	return ulpi;
 }

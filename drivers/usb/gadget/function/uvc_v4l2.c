@@ -494,18 +494,12 @@ uvc_v4l2_subscribe_event(struct v4l2_fh *fh,
 	if (sub->type < UVC_EVENT_FIRST || sub->type > UVC_EVENT_LAST)
 		return -EINVAL;
 
-	mutex_lock(&uvc->lock);
-
-	if (sub->type == UVC_EVENT_SETUP && uvc->func_connected) {
-		mutex_unlock(&uvc->lock);
+	if (sub->type == UVC_EVENT_SETUP && uvc->func_connected)
 		return -EBUSY;
-	}
 
 	ret = v4l2_event_subscribe(fh, sub, 2, NULL);
-	if (ret < 0) {
-		mutex_unlock(&uvc->lock);
+	if (ret < 0)
 		return ret;
-	}
 
 	if (sub->type == UVC_EVENT_SETUP) {
 		uvc->func_connected = true;
@@ -513,7 +507,6 @@ uvc_v4l2_subscribe_event(struct v4l2_fh *fh,
 		uvc_function_connect(uvc);
 	}
 
-	mutex_unlock(&uvc->lock);
 	return 0;
 }
 
@@ -522,9 +515,7 @@ static void uvc_v4l2_disable(struct uvc_device *uvc)
 	uvc_function_disconnect(uvc);
 	uvcg_video_disable(&uvc->video);
 	uvcg_free_buffers(&uvc->video.queue);
-	mutex_lock(&uvc->lock);
 	uvc->func_connected = false;
-	mutex_unlock(&uvc->lock);
 	wake_up_interruptible(&uvc->func_connected_queue);
 }
 
