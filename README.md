@@ -1,150 +1,79 @@
-# How do I submit patches to Android Common Kernels
+# 🌀 Bizarre Kernel | Galaxy M35 & A35 (Exynos 1380)
 
-1. BEST: Make all of your changes to upstream Linux. If appropriate, backport to the stable releases.
-   These patches will be merged automatically in the corresponding common kernels. If the patch is already
-   in upstream Linux, post a backport of the patch that conforms to the patch requirements below.
-   - Do not send patches upstream that contain only symbol exports. To be considered for upstream Linux,
-additions of `EXPORT_SYMBOL_GPL()` require an in-tree modular driver that uses the symbol -- so include
-the new driver or changes to an existing driver in the same patchset as the export.
-   - When sending patches upstream, the commit message must contain a clear case for why the patch
-is needed and beneficial to the community. Enabling out-of-tree drivers or functionality is not
-not a persuasive case.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/TheBizarreAbhishek/android_kernel_samsung_s5e8835/build-kernels.yml?branch=android13-5.15&style=for-the-badge&logo=github)](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/actions)
+[![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.208-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
+[![Android Version](https://img.shields.io/badge/Android-16-green?style=for-the-badge&logo=android)](https://source.android.com/)
 
-2. LESS GOOD: Develop your patches out-of-tree (from an upstream Linux point-of-view). Unless these are
-   fixing an Android-specific bug, these are very unlikely to be accepted unless they have been
-   coordinated with kernel-team@android.com. If you want to proceed, post a patch that conforms to the
-   patch requirements below.
+A highly optimized, customized GKI-compliant kernel for Samsung Galaxy M35 & A35 devices powered by the **Exynos 1380 (s5e8835)** SoC. Designed for power users, containerization enthusiasts, and security researchers.
 
-# Common Kernel patch requirements
+---
 
-- All patches must conform to the Linux kernel coding standards and pass `scripts/checkpatch.pl`
-- Patches shall not break gki_defconfig or allmodconfig builds for arm, arm64, x86, x86_64 architectures
-(see  https://source.android.com/setup/build/building-kernels)
-- If the patch is not merged from an upstream branch, the subject must be tagged with the type of patch:
-`UPSTREAM:`, `BACKPORT:`, `FROMGIT:`, `FROMLIST:`, or `ANDROID:`.
-- All patches must have a `Change-Id:` tag (see https://gerrit-review.googlesource.com/Documentation/user-changeid.html)
-- If an Android bug has been assigned, there must be a `Bug:` tag.
-- All patches must have a `Signed-off-by:` tag by the author and the submitter
+## 🚀 Key Features
 
-Additional requirements are listed below based on patch type
+### 🛡️ Rooting & Advanced Stealth
+* **KernelSU / KSU-Next:** Integrated dynamically at build time for next-generation kernel-level rooting.
+* **SUSFS integration:** Fully hidden root status with advanced path/mount spoofing (`SUS_PATH`, `SUS_MOUNT`, `SUS_KSTAT`, `Spoofer`, `Open Redirect`).
+* **SELinux Controls:** Available in both Enforcing (default) and Permissive builds.
 
-## Requirements for backports from mainline Linux: `UPSTREAM:`, `BACKPORT:`
+### 🐳 Container & Virtualization (Docker / Droidspace)
+* **Isolated Namespaces:** Full isolation support (`NET_NS`, `PID_NS`, `IPC_NS`, `UTS_NS`, `USER_NS`).
+* **kABI Preservation:** Custom GKI System V IPC patch ensures total stability, preventing Kernel ABI mismatch bootloops while allowing Docker and system containers to function.
 
-- If the patch is a cherry-pick from Linux mainline with no changes at all
-    - tag the patch subject with `UPSTREAM:`.
-    - add upstream commit information with a `(cherry picked from commit ...)` line
-    - Example:
-        - if the upstream commit message is
-```
-        important patch from upstream
+### 📡 NetHunter & External Wi-Fi Support
+* **Dynamic Drivers:** High-performance wireless injection adapters compiled as loadable modules (`.ko`):
+  * **Atheros:** `ath9k_htc` (AR9271), `ath9k`
+  * **Realtek:** `rtl8187`
+  * **Ralink:** `rt2800usb` (RT3070/RT5370)
+* **Systemless Drivers Module:** To keep the kernel zip compact (~21MB), the drivers are distributed as a separate flashable Magisk/KernelSU module (**`BizarreKernel-NetHunter-Drivers.zip`**).
+* **USB HID Injection:** Full BadUSB keyboard/mouse injection support.
 
-        This is the detailed description of the important patch
+### ⚡ Performance, Memory & Networking
+* **BBRv3 TCP:** Next-generation BBRv3 congestion control enabled as the default TCP algorithm for ultra-low latency and maximum bandwidth over Wi-Fi and mobile networks.
+* **NTSYNC:** Backported Windows NT synchronization primitives driver helper.
+* **ZRAM with ZSTD Compression:** Set default ZRAM compression algorithm to `zstd` for faster RAM compression, improving multitasking and reducing app reload lag.
+* **Reduced Overhead:** Disabled Samsung `SEC_DEBUG`, verbose ACPM power management logging, spurious IRQs logging, and block IO stats, reducing CPU overhead and eliminating boot/UI lag.
+* **Governor Support:** Enabled `ondemand` and `userspace` CPU scaling governors.
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        UPSTREAM: important patch from upstream
+### 🛡️ Samsung Security Bypasses & Stealth
+* **Knox Disabled:** Completely stripped proprietary Samsung Knox security subsystems (`DEFEX`, `PROCA`, `FIVE`, `DSMS`, `KPERFMON`) to allow root operations and arbitrary execution.
+* **GMS Stealth:** Stripped custom `localversion` suffix from `uname` to pass Google Mobile Services (GMS) Play Integrity and SafetyNet certifications.
+* **Hidden Configuration:** Disabled `/proc/config.gz` export to defeat root detectors checking kernel configs.
+---
 
-        This is the detailed description of the important patch
+## 📦 Build Matrix Variants
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+We build multiple kernel configurations automatically on GitHub Actions:
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+| Variant Name | Root Solution | SUSFS Stealth | SELinux Mode |
+| :--- | :---: | :---: | :---: |
+| `clean` | None | ❌ | Enforcing |
+| `permissive` | None | ❌ | Permissive |
+| `ksu` | KernelSU | ❌ | Enforcing |
+| `ksunext` | KernelSU Next | ❌ | Enforcing |
+| `ksu-susfs` | KernelSU | ✔️ | Enforcing |
+| `ksunext-susfs` | KernelSU Next | ✔️ | Enforcing |
+| `resukisu-susfs` | ReSukiSU | ✔️ | Enforcing |
+| `sukisu-ultra-susfs`| SukiSU Ultra | ✔️ | Enforcing |
 
-- If the patch requires any changes from the upstream version, tag the patch with `BACKPORT:`
-instead of `UPSTREAM:`.
-    - use the same tags as `UPSTREAM:`
-    - add comments about the changes under the `(cherry picked from commit ...)` line
-    - Example:
-```
-        BACKPORT: important patch from upstream
+---
 
-        This is the detailed description of the important patch
+## 🛠️ Toolchain & Specifications
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+* **Target Architecture:** `ARM64-v8a`
+* **SoC Platform:** Samsung Exynos 1380 (s5e8835)
+* **Host OS Support:** One UI 8.0 / 8.5 (Android 16)
+* **Compiler:** Google LLVM Clang Toolchain `r450784d`
+* **LTO Optimizations:** Link-Time Optimization (`CONFIG_LTO_CLANG=y`) enabled for maximum efficiency.
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        [joe: Resolved minor conflict in drivers/foo/bar.c ]
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+---
 
-## Requirements for other backports: `FROMGIT:`, `FROMLIST:`,
+## 📲 Installation Instructions
 
-- If the patch has been merged into an upstream maintainer tree, but has not yet
-been merged into Linux mainline
-    - tag the patch subject with `FROMGIT:`
-    - add info on where the patch came from as `(cherry picked from commit <sha1> <repo> <branch>)`. This
-must be a stable maintainer branch (not rebased, so don't use `linux-next` for example).
-    - if changes were required, use `BACKPORT: FROMGIT:`
-    - Example:
-        - if the commit message in the maintainer tree is
-```
-        important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        FROMGIT: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        (cherry picked from commit 878a2fd9de10b03d11d2f622250285c7e63deace
-         https://git.kernel.org/pub/scm/linux/kernel/git/foo/bar.git test-branch)
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-
-- If the patch has been submitted to LKML, but not accepted into any maintainer tree
-    - tag the patch subject with `FROMLIST:`
-    - add a `Link:` tag with a link to the submittal on lore.kernel.org
-    - add a `Bug:` tag with the Android bug (required for patches not accepted into
-a maintainer tree)
-    - if changes were required, use `BACKPORT: FROMLIST:`
-    - Example:
-```
-        FROMLIST: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Link: https://lore.kernel.org/lkml/20190619171517.GA17557@someone.com/
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-## Requirements for Android-specific patches: `ANDROID:`
-
-- If the patch is fixing a bug to Android-specific code
-    - tag the patch subject with `ANDROID:`
-    - add a `Fixes:` tag that cites the patch with the bug
-    - Example:
-```
-        ANDROID: fix android-specific bug in foobar.c
-
-        This is the detailed description of the important fix
-
-        Fixes: 1234abcd2468 ("foobar: add cool feature")
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-- If the patch is a new feature
-    - tag the patch subject with `ANDROID:`
-    - add a `Bug:` tag with the Android bug (required for android-specific features)
-
+1. **Kernel Installation:**
+   * Download the correct variant `.zip` file (e.g. `ksu-susfs`) for your setup from the [Releases](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/releases) tab.
+   * Flash the ZIP using a custom recovery (**TWRP / OrangeFox**) or a dedicated kernel flasher app (like **Franco Kernel Manager / EX Kernel Manager**).
+   * Reboot your device.
+2. **NetHunter / USB Wi-Fi Drivers (Optional):**
+   * If you wish to use external USB Wi-Fi adapters or BadUSB HID injection, download the standalone **`BizarreKernel-NetHunter-Drivers.zip`** from the same Releases release assets.
+   * Open **KernelSU Manager** or **Magisk Manager** on your booted device.
+   * Go to Modules -> Install from storage, select **`BizarreKernel-NetHunter-Drivers.zip`**, flash, and reboot.
