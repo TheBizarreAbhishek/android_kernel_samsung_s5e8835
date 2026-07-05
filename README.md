@@ -1,10 +1,15 @@
-# 🌀 Bizarre Kernel | Galaxy M35 & A35 (Exynos 1380)
+# 🌀 Bizarre Kernel | Galaxy A54, A35 & M35 (Exynos 1380)
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/TheBizarreAbhishek/android_kernel_samsung_s5e8835/build-kernels.yml?branch=android13-5.15&style=for-the-badge&logo=github)](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/actions)
 [![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.208-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
 [![Android Version](https://img.shields.io/badge/Android-16-green?style=for-the-badge&logo=android)](https://source.android.com/)
 
-A highly optimized, customized GKI-compliant kernel for Samsung Galaxy M35 & A35 devices powered by the **Exynos 1380 (s5e8835)** SoC. Designed for power users, containerization enthusiasts, and security researchers.
+A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e8835) devices. Designed for power users, containerization enthusiasts, and security researchers.
+
+### 📱 Supported Devices (Exynos 1380 / s5e8835)
+* **Samsung Galaxy A54 5G** (SM-A546B, SM-A546U, SM-A546E, SM-A5460)
+* **Samsung Galaxy A35 5G** (SM-A356B, SM-A356E, SM-A356U, SM-A3560)
+* **Samsung Galaxy M35 5G** (SM-M356B, SM-M356E)
 
 ---
 
