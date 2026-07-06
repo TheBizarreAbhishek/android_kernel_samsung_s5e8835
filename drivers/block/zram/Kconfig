@@ -91,3 +91,13 @@ config ZRAM_LRU_WRITEBACK_LIMIT
 	int "Limit zram lru writeback"
 	default 5120
 	depends on ZRAM_LRU_WRITEBACK
+
+config ZRAM_MULTI_COMP
+	bool "Enable multiple compression streams"
+	depends on ZRAM
+	default y
+	help
+	  This will enable multi-compression streams, so that ZRAM can
+	  re-compress pages using a potentially slower but more effective
+	  compression algorithm. Note, that IDLE page recompression
+	  requires ZRAM_MEMORY_TRACKING.
