@@ -3327,6 +3327,55 @@ out:
  *
  * Corresponding ZRAM slot should be locked.
  */
+/*
+ * Reads (decompresses if needed) a page from zspool (zsmalloc).
+ * Corresponding ZRAM slot should be locked.
+ */
+static int zram_read_from_zspool(struct zram *zram, struct page *page,
+				 u32 index)
+{
+	struct zcomp_strm *zstrm;
+	unsigned long handle;
+	unsigned int size;
+	void *src, *dst;
+	int ret;
+	u32 prio;
+
+	handle = zram_get_handle(zram, index);
+	if (!handle || zram_test_flag(zram, index, ZRAM_SAME)) {
+		unsigned long value;
+		void *mem;
+
+		value = handle ? zram_get_element(zram, index) : 0;
+		mem = kmap_atomic(page);
+		zram_fill_page(mem, PAGE_SIZE, value);
+		kunmap_atomic(mem);
+		return 0;
+	}
+
+	size = zram_get_obj_size(zram, index);
+
+	if (size != PAGE_SIZE) {
+		prio = zram_get_priority(zram, index);
+		zstrm = zcomp_stream_get(zram->comps[prio]);
+	}
+
+	src = zs_map_object(zram->mem_pool, handle, ZS_MM_RO);
+	if (size == PAGE_SIZE) {
+		dst = kmap_atomic(page);
+		copy_page(dst, src);
+		kunmap_atomic(dst);
+		ret = 0;
+	} else {
+		dst = kmap_atomic(page);
+		ret = zcomp_decompress(zstrm, src, size, dst);
+		kunmap_atomic(dst);
+		zcomp_stream_put(zram->comps[prio]);
+	}
+	zs_unmap_object(zram->mem_pool, handle);
+	return ret;
+}
+
 static int zram_recompress(struct zram *zram, u32 index, struct page *page,
 			   u32 threshold, u32 prio, u32 prio_max)
 {
