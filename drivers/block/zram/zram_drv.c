@@ -1238,7 +1238,7 @@ static void check_marker(void *addr, int size, struct hex_dump_pages *hdp)
 	BUG();
 }
 
-static void handle_decomp_fail(char *comp, int err, u32 index, void *src,
+static void handle_decomp_fail(const char *comp, int err, u32 index, void *src,
 			       unsigned int size, struct hex_dump_pages *hdp)
 {
 	bool is_marker_err = false;
