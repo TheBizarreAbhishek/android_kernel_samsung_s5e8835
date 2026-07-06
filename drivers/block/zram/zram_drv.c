@@ -184,9 +184,9 @@ static inline void zram_set_priority(struct zram *zram, u32 index, u32 prio)
 	 * Clear previous priority value first, in case if we recompress
 	 * further an already recompressed page
 	 */
-	zram->table[index].flags &= ~(ZRAM_COMP_PRIORITY_MASK <<
+	zram->table[index].flags &= ~((unsigned long)ZRAM_COMP_PRIORITY_MASK <<
 				      ZRAM_COMP_PRIORITY_BIT1);
-	zram->table[index].flags |= (prio << ZRAM_COMP_PRIORITY_BIT1);
+	zram->table[index].flags |= ((unsigned long)prio << ZRAM_COMP_PRIORITY_BIT1);
 }
 
 static inline u32 zram_get_priority(struct zram *zram, u32 index)
@@ -2292,7 +2292,7 @@ static void zram_handle_comp_page(struct work_struct *work)
 		size = PAGE_SIZE;
 	if (zhdr->size != size) {
 		pr_err("%s %s zhdr error, size should be %u but was %u src=0x%px offset=%u\n",
-			__func__, zram->compressor, size, zhdr->size, src,
+			__func__, zram->comp_algs[ZRAM_PRIMARY_COMP], size, zhdr->size, src,
 			offset);
 		print_hex_dump_pages(src_page, zw->nr_pages, page_idx);
 		BUG();
@@ -2304,7 +2304,7 @@ static void zram_handle_comp_page(struct work_struct *work)
 	}
 
 	dst = kmap_atomic(dst_page);
-	zstrm = zcomp_stream_get(zram->comp);
+	zstrm = zcomp_stream_get(zram->comps[ZRAM_PRIMARY_COMP]);
 	spanned = (offset + header_sz + size > PAGE_SIZE) ? true : false;
 	if (spanned) {
 		kunmap_atomic(src);
@@ -2320,14 +2320,14 @@ static void zram_handle_comp_page(struct work_struct *work)
 	}
 	ret = zcomp_decompress(zstrm, src_decomp, size, dst);
 out_huge:
-	zcomp_stream_put(zram->comp);
+	zcomp_stream_put(zram->comps[ZRAM_PRIMARY_COMP]);
 	if (ret) {
 		struct hex_dump_pages hdp;
 
 		hdp.pages = src_page;
 		hdp.nr_pages = zw->nr_pages;
 		hdp.idx = page_idx;
-		handle_decomp_fail(zram->compressor, ret, offset + header_sz,
+		handle_decomp_fail(zram->comp_algs[ZRAM_PRIMARY_COMP], ret, offset + header_sz,
 				   src_decomp, size, &hdp);
 	}
 	kunmap_atomic(dst);
@@ -3088,7 +3088,7 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 
 	/* Should NEVER happen. BUG() if it does. */
 	if (unlikely(ret))
-		handle_decomp_fail(zram->compressor, ret, index, src, size,
+		handle_decomp_fail(zram->comp_algs[prio], ret, index, src, size,
 				   NULL);
 
 	zs_unmap_object(zram->mem_pool, handle);
