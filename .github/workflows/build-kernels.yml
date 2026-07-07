@@ -195,9 +195,13 @@ jobs:
                   else
                     KSU_DIR="KernelSU"
                   fi
-                  # Ensure the repository clone is unshallowed so we get the full git history for accurate commit count
+                  # Ensure the repository clone is unshallowed for accurate commit count
+                  # Only run if repo is actually shallow (complete repos error on --unshallow)
                   cd "$GITHUB_WORKSPACE/$KSU_DIR"
-                  git fetch --unshallow || true
+                  IS_SHALLOW=$(git rev-parse --is-shallow-repository 2>/dev/null || echo "false")
+                  if [[ "$IS_SHALLOW" == "true" ]]; then
+                    git fetch --unshallow 2>/dev/null || true
+                  fi
                   KSU_GIT_VERSION=$(git rev-list --count HEAD)
                   cd "$GITHUB_WORKSPACE"
 
@@ -213,23 +217,24 @@ jobs:
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                  # Copy root-level uapi/ into drivers/kernelsu/include/uapi/
-                  # This handles forks like backslashxx where uapi/ is at root and
-                  # kernel/include/uapi is a broken symlink pointing to ../../uapi
+                  # Ensure include/uapi exists regardless of variant
                   mkdir -p drivers/kernelsu/include/uapi
-                  if [[ -d "$KSU_DIR/uapi" ]]; then
-                    # Real root-level uapi directory — copy files into include/uapi
+                  # If root-level uapi/ exists (backslashxx style), merge it in
+                  if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" ]]; then
                     cp -Rn "$KSU_DIR/uapi/." drivers/kernelsu/include/uapi/ 2>/dev/null || true
-                    echo "[+] Copied root-level uapi/ into drivers/kernelsu/include/uapi/"
+                    echo "[+] Merged root-level uapi/ into drivers/kernelsu/include/uapi/"
                   fi
-                  # Resolve any symlinks inside drivers/kernelsu/include/uapi
+                  # If drivers/kernelsu/include/uapi ended up as a symlink, resolve it to a real dir
                   if [[ -L "drivers/kernelsu/include/uapi" ]]; then
-                    UAPI_TARGET=$(readlink -f "drivers/kernelsu/include/uapi" || true)
+                    UAPI_TARGET=$(readlink -f "drivers/kernelsu/include/uapi" 2>/dev/null || true)
                     if [[ -n "$UAPI_TARGET" && -d "$UAPI_TARGET" ]]; then
-                      cp -R "$UAPI_TARGET" /tmp/ksu_uapi_tmp
-                      rm -rf drivers/kernelsu/include/uapi
+                      cp -R "$UAPI_TARGET" /tmp/ksu_uapi_tmp || true
+                      rm -f drivers/kernelsu/include/uapi
                       mv /tmp/ksu_uapi_tmp drivers/kernelsu/include/uapi
-                      echo "[+] Resolved uapi symlink → real directory"
+                      echo "[+] Resolved uapi symlink to real directory"
+                    else
+                      rm -f drivers/kernelsu/include/uapi
+                      mkdir -p drivers/kernelsu/include/uapi
                     fi
                   fi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory

@@ -371,6 +371,11 @@ static int zram_wbd(void *);
 static struct zram *g_zram;
 static bool is_app_launch;
 
+/* Pressure-driven recompression (android_vh_vmpressure hook) */
+static struct work_struct zram_recomp_work;
+static atomic_t zram_recomp_running = ATOMIC_INIT(0);
+static unsigned long zram_last_recomp_jiffies;
+
 static void fallocate_block(struct zram *zram, unsigned long blk_idx)
 {
 	struct block_device *bdev = zram->bdev;
@@ -469,6 +474,117 @@ static void stop_lru_writeback(struct zram *zram)
 		kthread_stop(zram->wbd);
 		zram->wbd = NULL;
 	}
+}
+
+/*
+ * zram_pressure_recomp_fn - work function for pressure-driven recompression
+ *
+ * Triggered by the android_vh_vmpressure vendor hook when the kernel detects
+ * memory pressure. CPU is already awake from kswapd/page reclaim so this adds
+ * zero extra wakeups — same model as Linux 6.8's recompression integration.
+ *
+ * Rate-limited to once per 30 seconds to prevent thrashing.
+ */
+static void zram_pressure_recomp_fn(struct work_struct *work)
+{
+	struct zram *zram = g_zram;
+	unsigned long nr_pages;
+	unsigned long index;
+	struct page *page;
+
+	/* Bail out if no zram device is ready */
+	if (!zram || !init_done(zram))
+		goto done;
+
+	nr_pages = zram->disksize >> PAGE_SHIFT;
+
+	/* Step 1: Mark all allocated pages as IDLE so we can identify cold data */
+	down_read(&zram->init_lock);
+	if (!init_done(zram)) {
+		up_read(&zram->init_lock);
+		goto done;
+	}
+	for (index = 0; index < nr_pages; index++) {
+		zram_slot_lock(zram, index);
+		if (zram_allocated(zram, index) &&
+				!zram_test_flag(zram, index, ZRAM_UNDER_WB))
+			zram_set_flag(zram, index, ZRAM_IDLE);
+		zram_slot_unlock(zram, index);
+		cond_resched();
+	}
+	up_read(&zram->init_lock);
+
+	/* Step 2: Recompress huge+idle pages with zstd secondary algorithm */
+	page = alloc_page(GFP_KERNEL | __GFP_NORETRY | __GFP_NOWARN);
+	if (!page)
+		goto done;
+
+	down_read(&zram->init_lock);
+	if (!init_done(zram)) {
+		up_read(&zram->init_lock);
+		__free_page(page);
+		goto done;
+	}
+
+	for (index = 0; index < nr_pages; index++) {
+		zram_slot_lock(zram, index);
+
+		if (!zram_allocated(zram, index))
+			goto next_slot;
+
+		/* Skip pages being written back or already processed */
+		if (zram_test_flag(zram, index, ZRAM_WB) ||
+		    zram_test_flag(zram, index, ZRAM_UNDER_WB) ||
+		    zram_test_flag(zram, index, ZRAM_SAME) ||
+		    zram_test_flag(zram, index, ZRAM_INCOMPRESSIBLE))
+			goto next_slot;
+
+		/* Only recompress idle huge pages (bad lz4 ratio → zstd improves) */
+		if (!zram_test_flag(zram, index, ZRAM_HUGE) ||
+		    !zram_test_flag(zram, index, ZRAM_IDLE))
+			goto next_slot;
+
+		zram_recompress(zram, index, page, 0,
+				ZRAM_SECONDARY_COMP, ZRAM_MAX_COMPS);
+next_slot:
+		zram_slot_unlock(zram, index);
+		cond_resched();
+	}
+
+	up_read(&zram->init_lock);
+	__free_page(page);
+
+	pr_debug("zram: pressure-driven recompression complete\n");
+done:
+	atomic_set(&zram_recomp_running, 0);
+}
+
+/*
+ * zram_vmpressure_hook_fn - Android vendor hook for vmpressure events
+ *
+ * Called from mm/vmpressure.c when the kernel calculates memory pressure.
+ * The CPU is already active handling page reclaim — we piggyback on that
+ * to schedule recompression work without any extra CPU wakeups.
+ */
+static void zram_vmpressure_hook_fn(void *data,
+				    struct mem_cgroup *memcg,
+				    bool *bypass)
+{
+	/* Rate-limit: at most once every 30 seconds */
+	if (time_before(jiffies, zram_last_recomp_jiffies + 30 * HZ))
+		return;
+
+	/* Don't pile up work if previous run is still going */
+	if (atomic_cmpxchg(&zram_recomp_running, 0, 1) != 0)
+		return;
+
+	if (!g_zram || !init_done(g_zram)) {
+		atomic_set(&zram_recomp_running, 0);
+		return;
+	}
+
+	zram_last_recomp_jiffies = jiffies;
+	schedule_work(&zram_recomp_work);
 }
 
 static void deinit_lru_writeback(struct zram *zram)
@@ -4374,6 +4490,20 @@ static int __init zram_init(void)
 		num_devices--;
 	}
 
+	/* Register Android vendor hook for pressure-driven recompression */
+	INIT_WORK(&zram_recomp_work, zram_pressure_recomp_fn);
+	zram_last_recomp_jiffies = jiffies;
+	ret = register_trace_android_vh_vmpressure(zram_vmpressure_hook_fn, NULL);
+	if (ret) {
+		pr_warn("zram: failed to register vmpressure hook (%d), "
+			"pressure-driven recompression disabled\n", ret);
+		/* Non-fatal: ZRAM still works, just without auto-recomp */
+		ret = 0;
+	} else {
+		pr_info("zram: pressure-driven recompression enabled "
+			"(android_vh_vmpressure)\n");
+	}
+
 	return 0;
 
 out_error:
@@ -4383,6 +4513,8 @@ out_error:
 
 static void __exit zram_exit(void)
 {
+	unregister_trace_android_vh_vmpressure(zram_vmpressure_hook_fn, NULL);
+	cancel_work_sync(&zram_recomp_work);
 	destroy_devices();
 }
 
