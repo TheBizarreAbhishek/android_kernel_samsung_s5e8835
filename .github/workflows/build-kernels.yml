@@ -546,6 +546,77 @@ jobs:
                   path: /home/runner/release
                   merge-multiple: true
 
+            - name: Create Universal Magisk Helper Modules
+              run: |
+                  set -euo pipefail
+                  mkdir -p /home/runner/universal_zram/modules
+                  mkdir -p /home/runner/universal_zram/META-INF/com/google/android
+                  mkdir -p /home/runner/universal_nethunter/modules
+                  mkdir -p /home/runner/universal_nethunter/META-INF/com/google/android
+
+                  # 1. Process ZRAM helper modules from all variants
+                  cd /home/runner/release
+                  for f in zram-multi-ksu-*.zip; do
+                    if [ -f "$f" ]; then
+                      var=${f#zram-multi-ksu-}
+                      var=${var%.zip}
+                      echo "[+] Extracting ZRAM modules for variant: $var"
+                      mkdir -p /tmp/zram_extract
+                      unzip -q "$f" -d /tmp/zram_extract
+                      
+                      mkdir -p "/home/runner/universal_zram/modules/$var"
+                      cp /tmp/zram_extract/*.ko "/home/runner/universal_zram/modules/$var/"
+                      
+                      if [ ! -f "/home/runner/universal_zram/service.sh" ]; then
+                        cp /tmp/zram_extract/service.sh /home/runner/universal_zram/
+                        cp /tmp/zram_extract/module.prop /home/runner/universal_zram/
+                      fi
+                      
+                      rm -rf /tmp/zram_extract
+                      rm -f "$f"
+                    fi
+                  done
+
+                  # 2. Process NetHunter modules from all variants
+                  for f in BizarreKernel-*-NetHunter-Drivers.zip; do
+                    if [ -f "$f" ]; then
+                      var=${f#BizarreKernel-}
+                      var=${var%-NetHunter-Drivers.zip}
+                      echo "[+] Extracting NetHunter modules for variant: $var"
+                      mkdir -p /tmp/nh_extract
+                      unzip -q "$f" -d /tmp/nh_extract
+                      
+                      mkdir -p "/home/runner/universal_nethunter/modules/$var"
+                      cp /tmp/nh_extract/system/vendor/lib/modules/*.ko "/home/runner/universal_nethunter/modules/$var/"
+                      
+                      if [ ! -f "/home/runner/universal_nethunter/module.prop" ]; then
+                        cp /tmp/nh_extract/module.prop /home/runner/universal_nethunter/
+                      fi
+                      
+                      rm -rf /tmp/nh_extract
+                      rm -f "$f"
+                    fi
+                  done
+
+                  # 3. Create ZRAM Universal update-binary
+                  printf '#!/sbin/sh\nZIPFILE="$3"\nMODID="zram-multi"\nMODPATH="/data/adb/modules/\\$MODID"\nui_print() { echo "\\$1"; }\nui_print "- Installing Universal ZRAM Multi-Compress Loader..."\nmkdir -p "\\$MODPATH"\nunzip -o "\\$ZIPFILE" -d "\\$MODPATH"\n\nKERNEL_VER=\$(uname -r)\nVARIANT="clean"\nif [[ "\\$KERNEL_VER" == *"+susfs"* ]]; then\n  if [[ "\\$KERNEL_VER" == *"ksunext"* ]]; then\n    VARIANT="ksunext-susfs"\n  elif [[ "\\$KERNEL_VER" == *"resukisu"* ]]; then\n    VARIANT="resukisu-susfs"\n  elif [[ "\\$KERNEL_VER" == *"sukisu"* ]]; then\n    VARIANT="sukisu-ultra-susfs"\n  elif [[ "\\$KERNEL_VER" == *"backslash"* ]]; then\n    VARIANT="backslash-susfs"\n  else\n    VARIANT="ksu-susfs"\n  fi\nelif [[ "\\$KERNEL_VER" == *"permissive"* ]]; then\n  VARIANT="permissive"\nelif [[ "\\$KERNEL_VER" == *"ksunext"* ]]; then\n  VARIANT="ksunext"\nelif [[ "\\$KERNEL_VER" == *"resukisu"* ]]; then\n  VARIANT="resukisu"\nelif [[ "\\$KERNEL_VER" == *"sukisu"* ]]; then\n  VARIANT="sukisu-ultra"\nelif [[ "\\$KERNEL_VER" == *"ksu"* ]]; then\n  VARIANT="ksu"\nfi\n\nui_print "- Detected Kernel: \\$VARIANT"\nif [ -d "\\$MODPATH/modules/\\$VARIANT" ]; then\n  mv "\\$MODPATH/modules/\\$VARIANT/"*.ko "\\$MODPATH/"\n  ui_print "- Loaded matching modules."\nelse\n  ui_print "❌ Error: Modules for \\$VARIANT not found!"\n  exit 1\nfi\nrm -rf "\\$MODPATH/modules" "\\$MODPATH/META-INF"\nchmod 755 "\\$MODPATH/service.sh"\nchmod 644 "\\$MODPATH/module.prop" "\\$MODPATH"/*.ko\nchown -R root:root "\\$MODPATH"\nchcon -hR u:object_r:system_file:s0 "\\$MODPATH"\nui_print "- Installation complete! Reboot to apply."\nexit 0\n' > /home/runner/universal_zram/META-INF/com/google/android/update-binary
+                  chmod +x /home/runner/universal_zram/META-INF/com/google/android/update-binary
+                  echo "# Magisk" > /home/runner/universal_zram/META-INF/com/google/android/updater-script
+
+                  # 4. Create NetHunter Universal update-binary
+                  printf '#!/sbin/sh\nZIPFILE="$3"\nMODID="bizarre_nethunter"\nMODPATH="/data/adb/modules/\\$MODID"\nui_print() { echo "\\$1"; }\nui_print "- Installing Universal NetHunter Drivers..."\nmkdir -p "\\$MODPATH"\nunzip -o "\\$ZIPFILE" -d "\\$MODPATH"\n\nKERNEL_VER=\$(uname -r)\nVARIANT="clean"\nif [[ "\\$KERNEL_VER" == *"+susfs"* ]]; then\n  if [[ "\\$KERNEL_VER" == *"ksunext"* ]]; then\n    VARIANT="ksunext-susfs"\n  elif [[ "\\$KERNEL_VER" == *"resukisu"* ]]; then\n    VARIANT="resukisu-susfs"\n  elif [[ "\\$KERNEL_VER" == *"sukisu"* ]]; then\n    VARIANT="sukisu-ultra-susfs"\n  elif [[ "\\$KERNEL_VER" == *"backslash"* ]]; then\n    VARIANT="backslash-susfs"\n  else\n    VARIANT="ksu-susfs"\n  fi\nelif [[ "\\$KERNEL_VER" == *"permissive"* ]]; then\n  VARIANT="permissive"\nelif [[ "\\$KERNEL_VER" == *"ksunext"* ]]; then\n  VARIANT="ksunext"\nelif [[ "\\$KERNEL_VER" == *"resukisu"* ]]; then\n  VARIANT="resukisu"\nelif [[ "\\$KERNEL_VER" == *"sukisu"* ]]; then\n  VARIANT="sukisu-ultra"\nelif [[ "\\$KERNEL_VER" == *"ksu"* ]]; then\n  VARIANT="ksu"\nfi\n\nui_print "- Detected Kernel: \\$VARIANT"\nif [ -d "\\$MODPATH/modules/\\$VARIANT" ]; then\n  mkdir -p "\\$MODPATH/system/vendor/lib/modules"\n  mv "\\$MODPATH/modules/\\$VARIANT/"*.ko "\\$MODPATH/system/vendor/lib/modules/"\n  ui_print "- Loaded matching modules."\nelse\n  ui_print "❌ Error: Modules for \\$VARIANT not found!"\n  exit 1\nfi\nrm -rf "\\$MODPATH/modules" "\\$MODPATH/META-INF"\nchmod 644 "\\$MODPATH/module.prop" "\\$MODPATH"/system/vendor/lib/modules/*.ko\nchown -R root:root "\\$MODPATH"\nchcon -hR u:object_r:system_file:s0 "\\$MODPATH"\nui_print "- Installation complete! Reboot to apply."\nexit 0\n' > /home/runner/universal_nethunter/META-INF/com/google/android/update-binary
+                  chmod +x /home/runner/universal_nethunter/META-INF/com/google/android/update-binary
+                  echo "# Magisk" > /home/runner/universal_nethunter/META-INF/com/google/android/updater-script
+
+                  # 5. Pack into Universal ZIPs
+                  cd /home/runner/universal_zram
+                  7z a /home/runner/release/zram-multi-ksu.zip . | tail -1
+                  
+                  cd /home/runner/universal_nethunter
+                  7z a /home/runner/release/BizarreKernel-NetHunter-Drivers.zip . | tail -1
+                  
+                  echo "✅ Universal Magisk Helper Modules Created successfully!"
+
             - name: Publish to GitHub Releases
               uses: softprops/action-gh-release@v2.6.1
               with:
