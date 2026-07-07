@@ -217,11 +217,10 @@ jobs:
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                  # Safely create include/uapi — remove existing file/symlink if present
-                  if [[ -e "drivers/kernelsu/include/uapi" || -L "drivers/kernelsu/include/uapi" ]]; then
-                    rm -rf drivers/kernelsu/include/uapi
+                  # Only create include/uapi if it does not exist (to avoid mkdir -p error on existing symlink)
+                  if [[ ! -e "drivers/kernelsu/include/uapi" && ! -L "drivers/kernelsu/include/uapi" ]]; then
+                    mkdir -p drivers/kernelsu/include/uapi
                   fi
-                  mkdir -p drivers/kernelsu/include/uapi
                   # If root-level uapi/ exists (backslashxx style), merge it in
                   if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" ]]; then
                     cp -Rn "$KSU_DIR/uapi/." drivers/kernelsu/include/uapi/ 2>/dev/null || true
