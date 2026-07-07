@@ -217,7 +217,10 @@ jobs:
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                  # Ensure include/uapi exists regardless of variant
+                  # Safely create include/uapi — remove existing file/symlink if present
+                  if [[ -e "drivers/kernelsu/include/uapi" || -L "drivers/kernelsu/include/uapi" ]]; then
+                    rm -rf drivers/kernelsu/include/uapi
+                  fi
                   mkdir -p drivers/kernelsu/include/uapi
                   # If root-level uapi/ exists (backslashxx style), merge it in
                   if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" ]]; then
