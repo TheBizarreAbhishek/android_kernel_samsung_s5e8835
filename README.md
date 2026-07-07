@@ -86,8 +86,9 @@ We build multiple kernel configurations automatically on GitHub Actions:
    * If you wish to use external USB Wi-Fi adapters or BadUSB HID injection, download the standalone **`BizarreKernel-NetHunter-Drivers.zip`** from the same Releases release assets.
    * Open **KernelSU Manager** or **Magisk Manager** on your booted device.
    * Go to Modules -> Install from storage, select **`BizarreKernel-NetHunter-Drivers.zip`**, flash, and reboot.
-3. **ZRAM Multi-Compress Loader (Optional):**
-   * If you wish to use multi-compression streams and recompression features of the backported ZRAM driver, download **`zram-multi-ksu.zip`** from the release assets.
+3. **ZRAM Multi-Compress Loader (Required for Multi-Compression):**
+   * **Note:** To actually utilize the multi-compression streams and recompression features of the backported ZRAM driver, flashing the helper module **`zram-multi-ksu.zip`** is **compulsory**. Without it, stock ZRAM configurations will persist.
+   * Download the standalone **`zram-multi-ksu.zip`** from the same Releases tab.
    * Open **KernelSU Manager** or **Magisk Manager** on your booted device.
    * Go to Modules -> Install from storage, select **`zram-multi-ksu.zip`**, flash, and reboot.
 
