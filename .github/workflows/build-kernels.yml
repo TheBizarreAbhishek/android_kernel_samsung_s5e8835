@@ -210,8 +210,8 @@ jobs:
                     # SukiSU / ReSukiSU use version base 40000 and offset 2815
                     KSU_VERSION=$(expr 40000 + $KSU_GIT_VERSION - 2815)
                   else
-                    # Tiann and other standard forks use version base 10000 or custom tag counts
-                    KSU_VERSION=$(expr 10000 + $KSU_GIT_VERSION)
+                    # Tiann and other standard forks use version base 30000 to match newest KSU Manager (32525 etc)
+                    KSU_VERSION=$(expr 30000 + $KSU_GIT_VERSION)
                   fi
                   KSU_GIT_TAG=$(cd "$KSU_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v4.1.3")
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
@@ -245,6 +245,17 @@ jobs:
                     echo "[+] Successfully copied real KSU uapi headers from $REAL_UAPI_SRC"
                   else
                     echo "[!] Warning: Could not locate a valid physical uapi directory in KSU source"
+                  fi
+
+                  # Fix backslash-susfs compile: #include "uapi/app_profile.h" inside supercall.h
+                  # expects drivers/kernelsu/include/uapi/uapi/app_profile.h to exist.
+                  # We create a self-referencing symlink 'uapi' inside uapi/ directory ONLY for backslashxx.
+                  # This will resolve 'uapi/app_profile.h' to 'app_profile.h' inside that directory.
+                  if [[ "${{ matrix.kernelsu }}" == "backslash" ]]; then
+                    cd drivers/kernelsu/include/uapi
+                    ln -sf . uapi
+                    cd "$GITHUB_WORKSPACE"
+                    echo "[+] Created uapi -> . self-referencing symlink for backslash compile compatibility"
                   fi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory
                   # Create a dummy marker so the submodule check passes without a real git repo
@@ -448,7 +459,7 @@ jobs:
                   echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
                   echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
 
-                  # Only compile and package modules Magisk ZIPs once (for clean variant build) to save space
+                  # Compile and package NetHunter Magisk Module ZIP once (for clean variant build) to save space
                   if [ "${{ matrix.variant }}" = "clean" ]; then
                       echo "📦 Creating NetHunter Wireless Drivers Magisk ZIP..."
                       MAGISK_DIR="$HOME/bizarre_nethunter"
@@ -499,9 +510,12 @@ jobs:
                       chmod +x "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
                       echo "# Magisk" > "$MAGISK_ZRAM_DIR/META-INF/com/google/android/updater-script"
 
-                      cd "$MAGISK_ZRAM_DIR"
-                      7z a "$HOME/AnyKernel3/zram-multi-ksu.zip" . | tail -1
-                      echo "✅ ZRAM Helper Module ZIP Created!"
+                       # Pack into zip
+                       cd "$MAGISK_ZRAM_DIR"
+                       7z a "$HOME/AnyKernel3/zram-multi-ksu.zip" . | tail -1
+                       echo "✅ ZRAM Helper Module ZIP Created!"
+                       # Return to workspace
+                       cd "$GITHUB_WORKSPACE"
                   fi
 
 
