@@ -397,22 +397,22 @@ jobs:
                   echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
                   echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
 
-                  # Only compile and package NetHunter Modules Magisk ZIP once (for clean variant build) to save space
+                  # Only compile and package modules Magisk ZIPs once (for clean variant build) to save space
                   if [ "${{ matrix.variant }}" = "clean" ]; then
                       echo "📦 Creating NetHunter Wireless Drivers Magisk ZIP..."
                       MAGISK_DIR="$HOME/bizarre_nethunter"
                       mkdir -p "$MAGISK_DIR/system/vendor/lib/modules"
                       mkdir -p "$MAGISK_DIR/META-INF/com/google/android"
                       
-                      # Copy all compiled kernel modules to Magisk directory
-                      find "$GITHUB_WORKSPACE/out" -name "*.ko" -print0 | xargs -0 -I {} cp {} "$MAGISK_DIR/system/vendor/lib/modules/"
+                      # Copy all compiled kernel modules to Magisk directory (excluding zram/zsmalloc)
+                      find "$GITHUB_WORKSPACE/out" -name "*.ko" ! -name "zram.ko" ! -name "zsmalloc.ko" -print0 | xargs -0 -I {} cp {} "$MAGISK_DIR/system/vendor/lib/modules/"
                       
                       # Create module.prop
                       echo "id=bizarre_nethunter" > "$MAGISK_DIR/module.prop"
                       echo "name=Bizarre Kernel NetHunter Drivers" >> "$MAGISK_DIR/module.prop"
                       echo "version=1.0" >> "$MAGISK_DIR/module.prop"
                       echo "versionCode=1" >> "$MAGISK_DIR/module.prop"
-                      echo "author=TheBizarreAbhishek" >> "$MAGISK_DIR/module.prop"
+                      echo "author=Abhishek Babu" >> "$MAGISK_DIR/module.prop"
                       echo "description=Systemless dynamic USB Wi-Fi and injection drivers for Bizarre Kernel" >> "$MAGISK_DIR/module.prop"
 
                       # Create update-binary
@@ -424,6 +424,59 @@ jobs:
                       cd "$MAGISK_DIR"
                       7z a "$HOME/AnyKernel3/BizarreKernel-NetHunter-Drivers.zip" . | tail -1
                       echo "✅ NetHunter Magisk Module ZIP Created!"
+
+                      # -------------------------------------------------------------
+                      # Create ZRAM Multi-Compress KSU Helper Module ZIP
+                      # -------------------------------------------------------------
+                      echo "📦 Creating ZRAM Multi-Compress KSU Helper Module ZIP..."
+                      MAGISK_ZRAM_DIR="$HOME/zram_multi_ksu"
+                      mkdir -p "$MAGISK_ZRAM_DIR/META-INF/com/google/android"
+                      
+                      cp "$GITHUB_WORKSPACE/out/drivers/block/zram/zram.ko" "$MAGISK_ZRAM_DIR/"
+                      cp "$GITHUB_WORKSPACE/out/mm/zsmalloc.ko" "$MAGISK_ZRAM_DIR/"
+                      
+                      echo "id=zram-multi" > "$MAGISK_ZRAM_DIR/module.prop"
+                      echo "name=ZRAM Multi-Compress Loader" >> "$MAGISK_ZRAM_DIR/module.prop"
+                      echo "version=1.0" >> "$MAGISK_ZRAM_DIR/module.prop"
+                      echo "versionCode=1" >> "$MAGISK_ZRAM_DIR/module.prop"
+                      echo "author=Abhishek Babu" >> "$MAGISK_ZRAM_DIR/module.prop"
+                      echo "description=Systemlessly unloads stock zram and loads custom zram with multi-compress and recompression support." >> "$MAGISK_ZRAM_DIR/module.prop"
+
+                      cat << 'EOF' > "$MAGISK_ZRAM_DIR/service.sh"
+                      #!/system/bin/sh
+                      MODDIR=${0%/*}
+
+                      until [ "$(getprop sys.boot_completed)" = "1" ]; do
+                        sleep 2
+                      done
+
+                      sleep 5
+
+                      ORIG_SIZE=$(cat /sys/block/zram0/disksize 2>/dev/null || echo "4294967296")
+                      swapoff /dev/block/zram0 2>/dev/null
+                      rmmod zram 2>/dev/null
+                      rmmod zsmalloc 2>/dev/null
+
+                      insmod $MODDIR/zsmalloc.ko
+                      insmod $MODDIR/zram.ko
+
+                      echo "lz4" > /sys/block/zram0/comp_algorithm
+                      echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm
+
+                      echo $ORIG_SIZE > /sys/block/zram0/disksize
+                      mkswap /dev/block/zram0
+                      swapon /dev/block/zram0
+
+                      echo "zram-multi: Custom modules loaded successfully with lz4 primary and zstd recomp" >> /dev/kmsg
+                      EOF
+
+                      printf '#!/sbin/sh\nZIPFILE="$3"\nMODID="zram-multi"\nMODPATH="/data/adb/modules/\\$MODID"\nui_print() { echo "\\$1"; }\nui_print "- Installing ZRAM Multi-Compress Loader..."\nmkdir -p "\\$MODPATH"\nunzip -o "\\$ZIPFILE" -d "\\$MODPATH"\nrm -rf "\\$MODPATH/META-INF"\nchmod 755 "\\$MODPATH/service.sh"\nchmod 644 "\\$MODPATH/module.prop" "\\$MODPATH"/*.ko\nchown -R root:root "\\$MODPATH"\nchcon -hR u:object_r:system_file:s0 "\\$MODPATH"\nui_print "- Installation complete! Reboot to apply."\nexit 0\n' > "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
+                      chmod +x "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
+                      echo "# Magisk" > "$MAGISK_ZRAM_DIR/META-INF/com/google/android/updater-script"
+                      
+                      cd "$MAGISK_ZRAM_DIR"
+                      7z a "$HOME/AnyKernel3/zram-multi-ksu.zip" . | tail -1
+                      echo "✅ ZRAM Helper Module ZIP Created!"
                   fi
 
 
