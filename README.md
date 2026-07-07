@@ -35,7 +35,10 @@ A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e
 ### ⚡ Performance, Memory & Networking
 * **BBRv3 TCP:** Next-generation BBRv3 congestion control enabled as the default TCP algorithm for ultra-low latency and maximum bandwidth over Wi-Fi and mobile networks.
 * **NTSYNC:** Backported Windows NT synchronization primitives driver helper.
-* **ZRAM with ZSTD Compression:** Set default ZRAM compression algorithm to `zstd` for faster RAM compression, improving multitasking and reducing app reload lag.
+* **Linux 6.8 ZRAM Backport (Multi-Compress & Recompression):** Backported the modern Linux 6.8 ZRAM driver to Linux 5.15, enabling:
+  * **Multi-Compression Streams:** Support for primary (`comp_algorithm`) and secondary/recompression (`recomp_algorithm`) streams concurrently (e.g. `lz4` as primary, `zstd` as recompression).
+  * **Recompression Support:** Automated memory page recompression to optimize memory footprints dynamically.
+  * **Systemless ZRAM Loader Module:** Distributed as a separate flashable helper module (**`zram-multi-ksu.zip`**) built automatically by our CI.
 * **Reduced Overhead:** Disabled Samsung `SEC_DEBUG`, verbose ACPM power management logging, spurious IRQs logging, and block IO stats, reducing CPU overhead and eliminating boot/UI lag.
 * **Governor Support:** Enabled `ondemand` and `userspace` CPU scaling governors.
 
@@ -57,6 +60,7 @@ We build multiple kernel configurations automatically on GitHub Actions:
 | `ksunext` | KernelSU Next | ❌ | Enforcing |
 | `ksu-susfs` | KernelSU | ✔️ | Enforcing |
 | `ksunext-susfs` | KernelSU Next | ✔️ | Enforcing |
+| `backslash-susfs` | KernelSU (backslashxx) | ✔️ | Enforcing |
 | `resukisu-susfs` | ReSukiSU | ✔️ | Enforcing |
 | `sukisu-ultra-susfs`| SukiSU Ultra | ✔️ | Enforcing |
 
@@ -82,3 +86,8 @@ We build multiple kernel configurations automatically on GitHub Actions:
    * If you wish to use external USB Wi-Fi adapters or BadUSB HID injection, download the standalone **`BizarreKernel-NetHunter-Drivers.zip`** from the same Releases release assets.
    * Open **KernelSU Manager** or **Magisk Manager** on your booted device.
    * Go to Modules -> Install from storage, select **`BizarreKernel-NetHunter-Drivers.zip`**, flash, and reboot.
+3. **ZRAM Multi-Compress Loader (Optional):**
+   * If you wish to use multi-compression streams and recompression features of the backported ZRAM driver, download **`zram-multi-ksu.zip`** from the release assets.
+   * Open **KernelSU Manager** or **Magisk Manager** on your booted device.
+   * Go to Modules -> Install from storage, select **`zram-multi-ksu.zip`**, flash, and reboot.
+
