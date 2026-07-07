@@ -195,9 +195,21 @@ jobs:
                   else
                     KSU_DIR="KernelSU"
                   fi
-                  KSU_GIT_VERSION=$(cd "$KSU_DIR" && git rev-list --count HEAD)
-                  KSU_VERSION=$(expr 30000 + $KSU_GIT_VERSION)
-                  KSU_GIT_TAG=$(cd "$KSU_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v3.2.0")
+                  # Ensure the repository clone is unshallowed so we get the full git history for accurate commit count
+                  cd "$GITHUB_WORKSPACE/$KSU_DIR"
+                  git fetch --unshallow || true
+                  KSU_GIT_VERSION=$(git rev-list --count HEAD)
+                  cd "$GITHUB_WORKSPACE"
+
+                  # Calculate KSU version code based on the variant type
+                  if [[ "${{ matrix.kernelsu }}" == "sukisu-ultra" || "${{ matrix.kernelsu }}" == "resukisu" ]]; then
+                    # SukiSU / ReSukiSU use version base 40000 and offset 2815
+                    KSU_VERSION=$(expr 40000 + $KSU_GIT_VERSION - 2815)
+                  else
+                    # Tiann and other standard forks use version base 10000 or custom tag counts
+                    KSU_VERSION=$(expr 10000 + $KSU_GIT_VERSION)
+                  fi
+                  KSU_GIT_TAG=$(cd "$KSU_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v4.1.3")
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
@@ -221,8 +233,11 @@ jobs:
                   for kfile in drivers/kernelsu/Kbuild drivers/kernelsu/Makefile; do
                      if [[ -f "$kfile" ]]; then
                        sed -i "s|ccflags-y += -DKSU_VERSION=16|ccflags-y += -DKSU_VERSION=$KSU_VERSION|g" "$kfile" || true
+                        sed -i "s|ccflags-y += -DKSU_VERSION=\$(KSU_VERSION)|ccflags-y += -DKSU_VERSION=$KSU_VERSION|g" "$kfile" || true
+                        sed -i "s|KSU_VERSION := [0-9][0-9]*|KSU_VERSION := $KSU_VERSION|g" "$kfile" || true
                        sed -i "s|KSU_VERSION_FALLBACK := [0-9][0-9]*|KSU_VERSION_FALLBACK := $KSU_VERSION|g" "$kfile" || true
                        sed -i "s|KSU_VERSION_TAG_FALLBACK := v0.0.1|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" "$kfile" || true
+                        sed -i "s|KSU_VERSION_TAG_FALLBACK := v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" "$kfile" || true
                      fi
                    done
                    echo "✅ KSU setup complete"
@@ -412,10 +427,10 @@ jobs:
                       MAGISK_DIR="$HOME/bizarre_nethunter"
                       mkdir -p "$MAGISK_DIR/system/vendor/lib/modules"
                       mkdir -p "$MAGISK_DIR/META-INF/com/google/android"
-                      
+
                       # Copy all compiled kernel modules to Magisk directory (excluding zram/zsmalloc)
                       find "$GITHUB_WORKSPACE/out" -name "*.ko" ! -name "zram.ko" ! -name "zsmalloc.ko" -print0 | xargs -0 -I {} cp {} "$MAGISK_DIR/system/vendor/lib/modules/"
-                      
+
                       # Create module.prop
                       echo "id=bizarre_nethunter" > "$MAGISK_DIR/module.prop"
                       echo "name=Bizarre Kernel NetHunter Drivers" >> "$MAGISK_DIR/module.prop"
@@ -428,7 +443,7 @@ jobs:
                       printf '#!/sbin/sh\numask 022\nui_print() { echo "$1"; }\nrequire_new_magisk() {\n  ui_print "*******************************"\n  ui_print " Please install Magisk v20.4+! "\n  ui_print "*******************************"\n  exit 1\n}\nOUTFD=$2\nZIPFILE=$3\nmount /data 2>/dev/null\n[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk\n. /data/adb/magisk/util_functions.sh\n[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk\ninstall_module\nexit 0\n' > "$MAGISK_DIR/META-INF/com/google/android/update-binary"
                       chmod +x "$MAGISK_DIR/META-INF/com/google/android/update-binary"
                       echo "# Magisk" > "$MAGISK_DIR/META-INF/com/google/android/updater-script"
-                      
+
                       # Pack into zip
                       cd "$MAGISK_DIR"
                       7z a "$HOME/AnyKernel3/BizarreKernel-NetHunter-Drivers.zip" . | tail -1
@@ -440,10 +455,10 @@ jobs:
                       echo "📦 Creating ZRAM Multi-Compress KSU Helper Module ZIP..."
                       MAGISK_ZRAM_DIR="$HOME/zram_multi_ksu"
                       mkdir -p "$MAGISK_ZRAM_DIR/META-INF/com/google/android"
-                      
+
                       cp "$GITHUB_WORKSPACE/out/drivers/block/zram/zram.ko" "$MAGISK_ZRAM_DIR/"
                       cp "$GITHUB_WORKSPACE/out/mm/zsmalloc.ko" "$MAGISK_ZRAM_DIR/"
-                      
+
                       echo "id=zram-multi" > "$MAGISK_ZRAM_DIR/module.prop"
                       echo "name=ZRAM Multi-Compress Loader" >> "$MAGISK_ZRAM_DIR/module.prop"
                       echo "version=1.0" >> "$MAGISK_ZRAM_DIR/module.prop"
@@ -456,7 +471,7 @@ jobs:
                       printf '#!/sbin/sh\nZIPFILE="$3"\nMODID="zram-multi"\nMODPATH="/data/adb/modules/\\$MODID"\nui_print() { echo "\\$1"; }\nui_print "- Installing ZRAM Multi-Compress Loader..."\nmkdir -p "\\$MODPATH"\nunzip -o "\\$ZIPFILE" -d "\\$MODPATH"\nrm -rf "\\$MODPATH/META-INF"\nchmod 755 "\\$MODPATH/service.sh"\nchmod 644 "\\$MODPATH/module.prop" "\\$MODPATH"/*.ko\nchown -R root:root "\\$MODPATH"\nchcon -hR u:object_r:system_file:s0 "\\$MODPATH"\nui_print "- Installation complete! Reboot to apply."\nexit 0\n' > "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
                       chmod +x "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
                       echo "# Magisk" > "$MAGISK_ZRAM_DIR/META-INF/com/google/android/updater-script"
-                      
+
                       cd "$MAGISK_ZRAM_DIR"
                       7z a "$HOME/AnyKernel3/zram-multi-ksu.zip" . | tail -1
                       echo "✅ ZRAM Helper Module ZIP Created!"
