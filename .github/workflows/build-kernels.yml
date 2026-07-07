@@ -217,27 +217,34 @@ jobs:
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                  # Only create include/uapi if it does not exist (to avoid mkdir -p error on existing symlink)
-                  if [[ ! -e "drivers/kernelsu/include/uapi" && ! -L "drivers/kernelsu/include/uapi" ]]; then
-                    mkdir -p drivers/kernelsu/include/uapi
-                  fi
-                  # If root-level uapi/ exists (backslashxx style), merge it in
+
+                  # Find the real (physical) uapi source directory in the cloned KSU repo
+                  REAL_UAPI_SRC=""
                   if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" ]]; then
-                    cp -Rn "$KSU_DIR/uapi/." drivers/kernelsu/include/uapi/ 2>/dev/null || true
-                    echo "[+] Merged root-level uapi/ into drivers/kernelsu/include/uapi/"
-                  fi
-                  # If drivers/kernelsu/include/uapi ended up as a symlink, resolve it to a real dir
-                  if [[ -L "drivers/kernelsu/include/uapi" ]]; then
-                    UAPI_TARGET=$(readlink -f "drivers/kernelsu/include/uapi" 2>/dev/null || true)
-                    if [[ -n "$UAPI_TARGET" && -d "$UAPI_TARGET" ]]; then
-                      cp -R "$UAPI_TARGET" /tmp/ksu_uapi_tmp || true
-                      rm -f drivers/kernelsu/include/uapi
-                      mv /tmp/ksu_uapi_tmp drivers/kernelsu/include/uapi
-                      echo "[+] Resolved uapi symlink to real directory"
+                    REAL_UAPI_SRC="$KSU_DIR/uapi"
+                  elif [[ -d "$KSU_DIR/kernel/include/uapi" && ! -L "$KSU_DIR/kernel/include/uapi" ]]; then
+                    REAL_UAPI_SRC="$KSU_DIR/kernel/include/uapi"
+                  else
+                    # Fallback: resolve symlink if both are linked
+                    RESOLVED_UAPI=$(readlink -f "$KSU_DIR/uapi" 2>/dev/null || true)
+                    if [[ -n "$RESOLVED_UAPI" && -d "$RESOLVED_UAPI" ]]; then
+                      REAL_UAPI_SRC="$RESOLVED_UAPI"
                     else
-                      rm -f drivers/kernelsu/include/uapi
-                      mkdir -p drivers/kernelsu/include/uapi
+                      RESOLVED_K_UAPI=$(readlink -f "$KSU_DIR/kernel/include/uapi" 2>/dev/null || true)
+                      if [[ -n "$RESOLVED_K_UAPI" && -d "$RESOLVED_K_UAPI" ]]; then
+                        REAL_UAPI_SRC="$RESOLVED_K_UAPI"
+                      fi
                     fi
+                  fi
+
+                  # Clean any existing uapi symlink/directory and copy the real headers
+                  rm -rf drivers/kernelsu/include/uapi || true
+                  mkdir -p drivers/kernelsu/include/uapi
+                  if [[ -n "$REAL_UAPI_SRC" && -d "$REAL_UAPI_SRC" ]]; then
+                    cp -R "$REAL_UAPI_SRC/." drivers/kernelsu/include/uapi/ 2>/dev/null || true
+                    echo "[+] Successfully copied real KSU uapi headers from $REAL_UAPI_SRC"
+                  else
+                    echo "[!] Warning: Could not locate a valid physical uapi directory in KSU source"
                   fi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory
                   # Create a dummy marker so the submodule check passes without a real git repo
