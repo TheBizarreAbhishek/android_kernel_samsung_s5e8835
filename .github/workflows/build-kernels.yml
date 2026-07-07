@@ -87,6 +87,11 @@ jobs:
                       susfs: "true"
                       permissive: "false"
                       localversion: "-bizarrekernel-sukisu_ultra+susfs"
+                    - variant: "backslash-susfs"
+                      kernelsu: "backslash"
+                      susfs: "true"
+                      permissive: "false"
+                      localversion: "-bizarrekernel-backslash+susfs"
         env:
             BUILD_LOCALVERSION: ${{ matrix.localversion }}
 
@@ -167,6 +172,10 @@ jobs:
                       curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
                       echo "✅ SukiSU Ultra (main) driver ready"
                     fi
+                  elif [[ "${{ matrix.kernelsu }}" == "backslash" ]]; then
+                    echo "🔧 Integrating KernelSU (backslashxx - staging)..."
+                    curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/staging/kernel/setup.sh" | bash -s staging
+                    echo "✅ KernelSU (backslashxx) driver ready"
                   else
                     echo "🔧 Integrating KernelSU (tiann - stable)..."
                     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
@@ -442,33 +451,7 @@ jobs:
                       echo "author=Abhishek Babu" >> "$MAGISK_ZRAM_DIR/module.prop"
                       echo "description=Systemlessly unloads stock zram and loads custom zram with multi-compress and recompression support." >> "$MAGISK_ZRAM_DIR/module.prop"
 
-                      cat << 'EOF' > "$MAGISK_ZRAM_DIR/service.sh"
-                      #!/system/bin/sh
-                      MODDIR=${0%/*}
-
-                      until [ "$(getprop sys.boot_completed)" = "1" ]; do
-                        sleep 2
-                      done
-
-                      sleep 5
-
-                      ORIG_SIZE=$(cat /sys/block/zram0/disksize 2>/dev/null || echo "4294967296")
-                      swapoff /dev/block/zram0 2>/dev/null
-                      rmmod zram 2>/dev/null
-                      rmmod zsmalloc 2>/dev/null
-
-                      insmod $MODDIR/zsmalloc.ko
-                      insmod $MODDIR/zram.ko
-
-                      echo "lz4" > /sys/block/zram0/comp_algorithm
-                      echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm
-
-                      echo $ORIG_SIZE > /sys/block/zram0/disksize
-                      mkswap /dev/block/zram0
-                      swapon /dev/block/zram0
-
-                      echo "zram-multi: Custom modules loaded successfully with lz4 primary and zstd recomp" >> /dev/kmsg
-                      EOF
+                      printf '#!/system/bin/sh\nMODDIR=${0%%%%/*}\n\nuntil [ "$(getprop sys.boot_completed)" = "1" ]; do\n  sleep 2\ndone\n\nsleep 5\n\nORIG_SIZE=$(cat /sys/block/zram0/disksize 2>/dev/null || echo "4294967296")\nswapoff /dev/block/zram0 2>/dev/null\nrmmod zram 2>/dev/null\nrmmod zsmalloc 2>/dev/null\n\ninsmod $MODDIR/zsmalloc.ko\ninsmod $MODDIR/zram.ko\n\necho "lz4" > /sys/block/zram0/comp_algorithm\necho "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm\n\necho $ORIG_SIZE > /sys/block/zram0/disksize\nmkswap /dev/block/zram0\nswapon /dev/block/zram0\n\necho "zram-multi: Custom modules loaded successfully with lz4 primary and zstd recomp" >> /dev/kmsg\n' > "$MAGISK_ZRAM_DIR/service.sh"
 
                       printf '#!/sbin/sh\nZIPFILE="$3"\nMODID="zram-multi"\nMODPATH="/data/adb/modules/\\$MODID"\nui_print() { echo "\\$1"; }\nui_print "- Installing ZRAM Multi-Compress Loader..."\nmkdir -p "\\$MODPATH"\nunzip -o "\\$ZIPFILE" -d "\\$MODPATH"\nrm -rf "\\$MODPATH/META-INF"\nchmod 755 "\\$MODPATH/service.sh"\nchmod 644 "\\$MODPATH/module.prop" "\\$MODPATH"/*.ko\nchown -R root:root "\\$MODPATH"\nchcon -hR u:object_r:system_file:s0 "\\$MODPATH"\nui_print "- Installation complete! Reboot to apply."\nexit 0\n' > "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
                       chmod +x "$MAGISK_ZRAM_DIR/META-INF/com/google/android/update-binary"
