@@ -78,6 +78,8 @@ static const struct block_device_operations zram_wb_devops;
 static void zram_free_page(struct zram *zram, size_t index);
 static int zram_bvec_read(struct zram *zram, struct bio_vec *bvec,
 				u32 index, int offset, struct bio *bio);
+static int zram_recompress(struct zram *zram, u32 index, struct page *page,
+			   u32 threshold, u32 prio, u32 prio_max);
 
 
 static int zram_slot_trylock(struct zram *zram, u32 index)
