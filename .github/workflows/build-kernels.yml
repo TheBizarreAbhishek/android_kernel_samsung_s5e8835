@@ -3,6 +3,41 @@ name: Build Kernels
 on:
     workflow_dispatch:
         inputs:
+            build_all:
+                description: "Build ALL variants (Overrides individual choices below)"
+                required: false
+                default: true
+                type: boolean
+            build_clean:
+                description: "Build: clean (No Root)"
+                required: false
+                default: false
+                type: boolean
+            build_permissive:
+                description: "Build: permissive (SELinux Permissive)"
+                required: false
+                default: false
+                type: boolean
+            build_ksu:
+                description: "Build: ksu (KernelSU)"
+                required: false
+                default: false
+                type: boolean
+            build_ksunext:
+                description: "Build: ksunext (KernelSU-Next)"
+                required: false
+                default: false
+                type: boolean
+            build_ksu_susfs:
+                description: "Build: ksu-susfs (KernelSU + SUSFS)"
+                required: false
+                default: false
+                type: boolean
+            build_ksunext_susfs:
+                description: "Build: ksunext-susfs (KernelSU-Next + SUSFS)"
+                required: false
+                default: false
+                type: boolean
             prerelease:
                 description: "Mark the GitHub release as a prerelease"
                 required: false
@@ -30,63 +65,59 @@ defaults:
         shell: bash
 
 jobs:
+    setup-matrix:
+        name: Setup Build Matrix
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.set-matrix.outputs.matrix }}
+        steps:
+            - id: set-matrix
+              run: |
+                BUILD_ALL="${{ github.event.inputs.build_all }}"
+                BUILD_CLEAN="${{ github.event.inputs.build_clean }}"
+                BUILD_PERMISSIVE="${{ github.event.inputs.build_permissive }}"
+                BUILD_KSU="${{ github.event.inputs.build_ksu }}"
+                BUILD_KSUNEXT="${{ github.event.inputs.build_ksunext }}"
+                BUILD_KSU_SUSFS="${{ github.event.inputs.build_ksu_susfs }}"
+                BUILD_KSUNEXT_SUSFS="${{ github.event.inputs.build_ksunext_susfs }}"
+                
+                SELECTED_VARIANTS=()
+                if [ "$BUILD_ALL" = "true" ] || [ -z "$BUILD_ALL" ]; then
+                  SELECTED_VARIANTS=("clean" "permissive" "ksu" "ksunext" "ksu-susfs" "ksunext-susfs")
+                else
+                  [ "$BUILD_CLEAN" = "true" ] && SELECTED_VARIANTS+=("clean")
+                  [ "$BUILD_PERMISSIVE" = "true" ] && SELECTED_VARIANTS+=("permissive")
+                  [ "$BUILD_KSU" = "true" ] && SELECTED_VARIANTS+=("ksu")
+                  [ "$BUILD_KSUNEXT" = "true" ] && SELECTED_VARIANTS+=("ksunext")
+                  [ "$BUILD_KSU_SUSFS" = "true" ] && SELECTED_VARIANTS+=("ksu-susfs")
+                  [ "$BUILD_KSUNEXT_SUSFS" = "true" ] && SELECTED_VARIANTS+=("ksunext-susfs")
+                fi
+                
+                if [ ${#SELECTED_VARIANTS[@]} -eq 0 ]; then
+                  SELECTED_VARIANTS=("clean" "permissive" "ksu" "ksunext" "ksu-susfs" "ksunext-susfs")
+                fi
+                
+                SEL_ARRAY=$(printf '%s\n' "${SELECTED_VARIANTS[@]}" | jq -R . | jq -s -c .)
+                
+                JSON='[
+                  {"variant": "clean", "kernelsu": "none", "susfs": "false", "permissive": "false", "localversion": "-bizarrekernel-clean"},
+                  {"variant": "permissive", "kernelsu": "none", "susfs": "false", "permissive": "true", "localversion": "-bizarrekernel-permissive"},
+                  {"variant": "ksu", "kernelsu": "ksu", "susfs": "false", "permissive": "false", "localversion": "-bizarrekernel-ksu"},
+                  {"variant": "ksunext", "kernelsu": "ksunext", "susfs": "false", "permissive": "false", "localversion": "-bizarrekernel-ksunext"},
+                  {"variant": "ksu-susfs", "kernelsu": "ksu", "susfs": "true", "permissive": "false", "localversion": "-bizarrekernel-ksu+susfs"},
+                  {"variant": "ksunext-susfs", "kernelsu": "ksunext", "susfs": "true", "permissive": "false", "localversion": "-bizarrekernel-ksunext+susfs"}
+                ]'
+                
+                COMPACT_JSON=$(echo "$JSON" | jq --argjson sel "$SEL_ARRAY" -c '{include: map(select(.variant as $v | $sel | index($v)))}')
+                echo "matrix=$COMPACT_JSON" >> $GITHUB_OUTPUT
+
     build:
         name: Build Bizarre Kernel (${{ matrix.variant }})
+        needs: setup-matrix
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
-            matrix:
-                include:
-                    - variant: "clean"
-                      kernelsu: "none"
-                      susfs: "false"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-clean"
-                    - variant: "permissive"
-                      kernelsu: "none"
-                      susfs: "false"
-                      permissive: "true"
-                      localversion: "-bizarrekernel-permissive"
-                    - variant: "ksu"
-                      kernelsu: "ksu"
-                      susfs: "false"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-ksu"
-                    - variant: "ksunext"
-                      kernelsu: "ksunext"
-                      susfs: "false"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-ksunext"
-                    - variant: "ksu-susfs"
-                      kernelsu: "ksu"
-                      susfs: "true"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-ksu+susfs"
-                    - variant: "ksunext-susfs"
-                      kernelsu: "ksunext"
-                      susfs: "true"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-ksunext+susfs"
-                    - variant: "resukisu"
-                      kernelsu: "resukisu"
-                      susfs: "false"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-resukisu"
-                    - variant: "resukisu-susfs"
-                      kernelsu: "resukisu"
-                      susfs: "true"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-resukisu+susfs"
-                    - variant: "sukisu-ultra"
-                      kernelsu: "sukisu-ultra"
-                      susfs: "false"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-sukisu_ultra"
-                    - variant: "sukisu-ultra-susfs"
-                      kernelsu: "sukisu-ultra"
-                      susfs: "true"
-                      permissive: "false"
-                      localversion: "-bizarrekernel-sukisu_ultra+susfs"
+            matrix: "${{ fromJson(needs.setup-matrix.outputs.matrix) }}"
         env:
             BUILD_LOCALVERSION: ${{ matrix.localversion }}
 
@@ -167,6 +198,10 @@ jobs:
                       curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
                       echo "✅ SukiSU Ultra (main) driver ready"
                     fi
+                  elif [[ "${{ matrix.kernelsu }}" == "backslash" ]]; then
+                    echo "🔧 Integrating KernelSU (backslashxx - staging)..."
+                    curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/staging/kernel/setup.sh" | bash -s staging
+                    echo "✅ KernelSU (backslashxx) driver ready"
                   else
                     echo "🔧 Integrating KernelSU (tiann - stable)..."
                     curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
@@ -186,18 +221,68 @@ jobs:
                   else
                     KSU_DIR="KernelSU"
                   fi
-                  KSU_GIT_VERSION=$(cd "$KSU_DIR" && git rev-list --count HEAD)
-                  KSU_VERSION=$(expr 30000 + $KSU_GIT_VERSION)
-                  KSU_GIT_TAG=$(cd "$KSU_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v3.2.0")
+                  # Ensure the repository clone is unshallowed for accurate commit count
+                  # Only run if repo is actually shallow (complete repos error on --unshallow)
+                  cd "$GITHUB_WORKSPACE/$KSU_DIR"
+                  IS_SHALLOW=$(git rev-parse --is-shallow-repository 2>/dev/null || echo "false")
+                  if [[ "$IS_SHALLOW" == "true" ]]; then
+                    git fetch --unshallow 2>/dev/null || true
+                  fi
+                  KSU_GIT_VERSION=$(git rev-list --count HEAD)
+                  cd "$GITHUB_WORKSPACE"
+
+                  # Calculate KSU version code based on the variant type
+                  if [[ "${{ matrix.kernelsu }}" == "sukisu-ultra" || "${{ matrix.kernelsu }}" == "resukisu" ]]; then
+                    # SukiSU / ReSukiSU use version base 40000 and offset 2815
+                    KSU_VERSION=$(expr 40000 + $KSU_GIT_VERSION - 2815)
+                  else
+                    # Tiann and other standard forks use version base 30000 to match newest KSU Manager (32525 etc)
+                    KSU_VERSION=$(expr 30000 + $KSU_GIT_VERSION)
+                  fi
+                  KSU_GIT_TAG=$(cd "$KSU_DIR" && git describe --tags --abbrev=0 2>/dev/null || echo "v4.1.3")
                   echo "[+] Calculated KSU version code: $KSU_VERSION (Tag: $KSU_GIT_TAG)"
                   rm -rf drivers/kernelsu
                   cp -R "$KSU_DIR/kernel" drivers/kernelsu
-                    # Only replace drivers/kernelsu/include/uapi if the root-level uapi is a real directory (not a symlink) and contains files
-                    if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" && "$(ls -A "$KSU_DIR/uapi" 2>/dev/null)" ]]; then
-                      rm -rf drivers/kernelsu/include/uapi || true
-                      mkdir -p drivers/kernelsu/include
-                      cp -R "$KSU_DIR/uapi" drivers/kernelsu/include/uapi
+
+                  # Find the real (physical) uapi source directory in the cloned KSU repo
+                  REAL_UAPI_SRC=""
+                  if [[ -d "$KSU_DIR/uapi" && ! -L "$KSU_DIR/uapi" ]]; then
+                    REAL_UAPI_SRC="$KSU_DIR/uapi"
+                  elif [[ -d "$KSU_DIR/kernel/include/uapi" && ! -L "$KSU_DIR/kernel/include/uapi" ]]; then
+                    REAL_UAPI_SRC="$KSU_DIR/kernel/include/uapi"
+                  else
+                    # Fallback: resolve symlink if both are linked
+                    RESOLVED_UAPI=$(readlink -f "$KSU_DIR/uapi" 2>/dev/null || true)
+                    if [[ -n "$RESOLVED_UAPI" && -d "$RESOLVED_UAPI" ]]; then
+                      REAL_UAPI_SRC="$RESOLVED_UAPI"
+                    else
+                      RESOLVED_K_UAPI=$(readlink -f "$KSU_DIR/kernel/include/uapi" 2>/dev/null || true)
+                      if [[ -n "$RESOLVED_K_UAPI" && -d "$RESOLVED_K_UAPI" ]]; then
+                        REAL_UAPI_SRC="$RESOLVED_K_UAPI"
+                      fi
                     fi
+                  fi
+
+                  # Clean any existing uapi symlink/directory and copy the real headers
+                  rm -rf drivers/kernelsu/include/uapi || true
+                  mkdir -p drivers/kernelsu/include/uapi
+                  if [[ -n "$REAL_UAPI_SRC" && -d "$REAL_UAPI_SRC" ]]; then
+                    cp -R "$REAL_UAPI_SRC/." drivers/kernelsu/include/uapi/ 2>/dev/null || true
+                    echo "[+] Successfully copied real KSU uapi headers from $REAL_UAPI_SRC"
+                  else
+                    echo "[!] Warning: Could not locate a valid physical uapi directory in KSU source"
+                  fi
+
+                  # Fix backslash-susfs compile: #include "uapi/app_profile.h" inside supercall.h
+                  # expects drivers/kernelsu/include/uapi/uapi/app_profile.h to exist.
+                  # We create a self-referencing symlink 'uapi' inside uapi/ directory ONLY for backslashxx.
+                  # This will resolve 'uapi/app_profile.h' to 'app_profile.h' inside that directory.
+                  if [[ "${{ matrix.kernelsu }}" == "backslash" ]]; then
+                    cd drivers/kernelsu/include/uapi
+                    ln -sf . uapi
+                    cd "$GITHUB_WORKSPACE"
+                    echo "[+] Created uapi -> . self-referencing symlink for backslash compile compatibility"
+                  fi
                   # ReSukiSU Kbuild checks for a .git marker in the parent (drivers/) directory
                   # Create a dummy marker so the submodule check passes without a real git repo
                   if [[ "${{ matrix.kernelsu }}" == "resukisu" ]]; then
@@ -212,8 +297,11 @@ jobs:
                   for kfile in drivers/kernelsu/Kbuild drivers/kernelsu/Makefile; do
                      if [[ -f "$kfile" ]]; then
                        sed -i "s|ccflags-y += -DKSU_VERSION=16|ccflags-y += -DKSU_VERSION=$KSU_VERSION|g" "$kfile" || true
+                        sed -i "s|ccflags-y += -DKSU_VERSION=\$(KSU_VERSION)|ccflags-y += -DKSU_VERSION=$KSU_VERSION|g" "$kfile" || true
+                        sed -i "s|KSU_VERSION := [0-9][0-9]*|KSU_VERSION := $KSU_VERSION|g" "$kfile" || true
                        sed -i "s|KSU_VERSION_FALLBACK := [0-9][0-9]*|KSU_VERSION_FALLBACK := $KSU_VERSION|g" "$kfile" || true
                        sed -i "s|KSU_VERSION_TAG_FALLBACK := v0.0.1|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" "$kfile" || true
+                        sed -i "s|KSU_VERSION_TAG_FALLBACK := v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" "$kfile" || true
                      fi
                    done
                    echo "✅ KSU setup complete"
@@ -397,36 +485,7 @@ jobs:
                   echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
                   echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
 
-                  # Only compile and package NetHunter Modules Magisk ZIP once (for clean variant build) to save space
-                  if [ "${{ matrix.variant }}" = "clean" ]; then
-                      echo "📦 Creating NetHunter Wireless Drivers Magisk ZIP..."
-                      MAGISK_DIR="$HOME/bizarre_nethunter"
-                      mkdir -p "$MAGISK_DIR/system/vendor/lib/modules"
-                      mkdir -p "$MAGISK_DIR/META-INF/com/google/android"
-                      
-                      # Copy all compiled kernel modules to Magisk directory
-                      find "$GITHUB_WORKSPACE/out" -name "*.ko" -print0 | xargs -0 -I {} cp {} "$MAGISK_DIR/system/vendor/lib/modules/"
-                      
-                      # Create module.prop
-                      echo "id=bizarre_nethunter" > "$MAGISK_DIR/module.prop"
-                      echo "name=Bizarre Kernel NetHunter Drivers" >> "$MAGISK_DIR/module.prop"
-                      echo "version=1.0" >> "$MAGISK_DIR/module.prop"
-                      echo "versionCode=1" >> "$MAGISK_DIR/module.prop"
-                      echo "author=TheBizarreAbhishek" >> "$MAGISK_DIR/module.prop"
-                      echo "description=Systemless dynamic USB Wi-Fi and injection drivers for Bizarre Kernel" >> "$MAGISK_DIR/module.prop"
-
-                      # Create update-binary
-                      printf '#!/sbin/sh\numask 022\nui_print() { echo "$1"; }\nrequire_new_magisk() {\n  ui_print "*******************************"\n  ui_print " Please install Magisk v20.4+! "\n  ui_print "*******************************"\n  exit 1\n}\nOUTFD=$2\nZIPFILE=$3\nmount /data 2>/dev/null\n[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk\n. /data/adb/magisk/util_functions.sh\n[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk\ninstall_module\nexit 0\n' > "$MAGISK_DIR/META-INF/com/google/android/update-binary"
-                      chmod +x "$MAGISK_DIR/META-INF/com/google/android/update-binary"
-                      echo "# Magisk" > "$MAGISK_DIR/META-INF/com/google/android/updater-script"
-                      
-                      # Pack into zip
-                      cd "$MAGISK_DIR"
-                      7z a "$HOME/AnyKernel3/BizarreKernel-NetHunter-Drivers.zip" . | tail -1
-                      echo "✅ NetHunter Magisk Module ZIP Created!"
-                  fi
-
-
+                  # -------------------------------------------------------------
             - name: Upload kernel artifact
               uses: actions/upload-artifact@v4
               with:
@@ -463,29 +522,23 @@ jobs:
                   prerelease: ${{ github.event.inputs.prerelease == 'true' }}
                   overwrite_files: true
                   body: |
-                      ### Bizarre Kernel for Galaxy M35 + A35 (Exynos 1380 / s5e8835)
+                      ### Bizarre Kernel for Galaxy A54, A35 & M35 (Exynos 1380 / s5e8835)
 
-                      ### Features
-                      - KernelSU-Next: https://github.com/rifsxd/KernelSU-Next (matrix variants)
-                      - KernelSU (tiann stable): https://github.com/tiann/KernelSU (matrix variants)
-                      - SUSFS: https://gitlab.com/simonpunk/susfs4ksu
-                      - Droidspace & Docker support (isolated namespaces, cgroups, System V IPC preserved)
-                      - NetHunter support (BadUSB HID injection & external Wi-Fi dynamic driver modules: ath9k_htc, rtl8187, rt2800usb)
-                      - Knox Security Bypasses (stripped DEFEX, PROCA, FIVE, DSMS, KPERFMON)
-                      - Memory Optimization: ZRAM default compression algorithm set to ZSTD
-                      - Performance Tuning: Stripped Samsung SEC_DEBUG and ACPM log levels to eliminate boot/UI lag
-                      - GMS Stealth: Stripped custom localversion and disabled proc/config.gz to pass Play Integrity
-                      - Unified kernel for both SM-M356B and SM-A356B
-                      - Android 16 / One UI 8.0 & 8.5
+                      ### 🚀 Dynamic Features
+                      - **KernelSU-Next / KernelSU (tiann stable):** Dynamic build-time integrations.
+                      - **SUSFS Spoofing:** Complete stealth systemlessly hiding root status.
+                      - **Droidspace & Docker Support:** Full isolated namespace routing & System V IPC kABI preservation.
+                      - **NetHunter Support:** Native USB HID (BadUSB) injection support.
+                      - **Overhead Optimization:** Disabled Knox (`DEFEX`, `PROCA`, `FIVE`), stripped Samsung ACPM debugging levels, and GMS Stealth integrations to pass Google Play Integrity out of the box.
 
-                      ### Flashing Instructions
-                      1. Flash the zip via KernelSU Manager or any recovery
-                      2. Reboot
+                      ### 📲 Flashing Instructions
+                      1. **Kernel:** Download and flash the matching variant ZIP (e.g., `bizarrekernel-ksu+susfs-2026-07-07.zip`) using TWRP / OrangeFox or FKM.
 
-                      ### Build information
-                      - **Kernel:** android13-5.15 (LTS ${{ steps.date.outputs.DATE }})
-                      - **Clang:** r450784d
-                      - **Target SoC:** Exynos 1380 (s5e8835)
+                      ### 🛠️ Build Specs
+                      - **Kernel Base:** android13-5.15 (LTS ${{ steps.date.outputs.DATE }})
+                      - **Toolchain:** Google Clang r450784d (LTO optimized)
+                      - **Target Platforms:** One UI 8.0 & 8.5 (Android 16)
+                      - **Selected Dispatch Variant:** `${{ github.event.inputs.variant || 'all' }}`
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
