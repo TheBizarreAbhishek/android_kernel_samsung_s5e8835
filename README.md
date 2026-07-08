@@ -57,8 +57,7 @@ We build multiple kernel configurations automatically on GitHub Actions:
 | `ksunext` | KernelSU Next | ❌ | Enforcing |
 | `ksu-susfs` | KernelSU | ✔️ | Enforcing |
 | `ksunext-susfs` | KernelSU Next | ✔️ | Enforcing |
-| `resukisu-susfs` | ReSukiSU | ✔️ | Enforcing |
-| `sukisu-ultra-susfs`| SukiSU Ultra | ✔️ | Enforcing |
+
 
 ---
 
