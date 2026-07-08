@@ -1,4 +1,4 @@
-# 🌀 Bizarre Kernel | Galaxy A54, A35 & M35 (Exynos 1380)
+# 🌀 Bizarre Kernel | Galaxy M35 & A35 (Exynos 1380)
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/TheBizarreAbhishek/android_kernel_samsung_s5e8835/build-kernels.yml?branch=android13-5.15&style=for-the-badge&logo=github)](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/actions)
 [![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.208-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
@@ -7,9 +7,8 @@
 A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e8835) devices. Designed for power users, containerization enthusiasts, and security researchers.
 
 ### 📱 Supported Devices (Exynos 1380 / s5e8835)
-* **Samsung Galaxy A54 5G** (SM-A546B, SM-A546U, SM-A546E, SM-A5460)
-* **Samsung Galaxy A35 5G** (SM-A356B, SM-A356E, SM-A356U, SM-A3560)
 * **Samsung Galaxy M35 5G** (SM-M356B, SM-M356E)
+* **Samsung Galaxy A35 5G** (SM-A356B, SM-A356E, SM-A356U, SM-A3560)
 
 ---
 
@@ -24,14 +23,6 @@ A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e
 * **Isolated Namespaces:** Full isolation support (`NET_NS`, `PID_NS`, `IPC_NS`, `UTS_NS`, `USER_NS`).
 * **kABI Preservation:** Custom GKI System V IPC patch ensures total stability, preventing Kernel ABI mismatch bootloops while allowing Docker and system containers to function.
 
-### 📡 NetHunter & External Wi-Fi Support
-* **Dynamic Drivers:** High-performance wireless injection adapters compiled as loadable modules (`.ko`):
-  * **Atheros:** `ath9k_htc` (AR9271), `ath9k`
-  * **Realtek:** `rtl8187`
-  * **Ralink:** `rt2800usb` (RT3070/RT5370)
-* **Systemless Drivers Module:** To keep the kernel zip compact (~21MB), the drivers are distributed as a separate flashable Magisk/KernelSU module (**`BizarreKernel-NetHunter-Drivers.zip`**).
-* **USB HID Injection:** Full BadUSB keyboard/mouse injection support.
-
 ### ⚡ Performance, Memory & Networking
 * **BBRv3 TCP:** Next-generation BBRv3 congestion control enabled as the default TCP algorithm for ultra-low latency and maximum bandwidth over Wi-Fi and mobile networks.
 * **NTSYNC:** Backported Windows NT synchronization primitives driver helper.
@@ -41,8 +32,8 @@ A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e
 
 ### 🛡️ Samsung Security Bypasses & Stealth
 * **Knox Disabled:** Completely stripped proprietary Samsung Knox security subsystems (`DEFEX`, `PROCA`, `FIVE`, `DSMS`, `KPERFMON`) to allow root operations and arbitrary execution.
-* **GMS Stealth:** Stripped custom `localversion` suffix from `uname` to pass Google Mobile Services (GMS) Play Integrity and SafetyNet certifications.
 * **Hidden Configuration:** Disabled `/proc/config.gz` export to defeat root detectors checking kernel configs.
+
 ---
 
 ## 📦 Build Matrix Variants
@@ -77,7 +68,9 @@ We build multiple kernel configurations automatically on GitHub Actions:
    * Download the correct variant `.zip` file (e.g. `ksu-susfs`) for your setup from the [Releases](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/releases) tab.
    * Flash the ZIP using a custom recovery (**TWRP / OrangeFox**) or a dedicated kernel flasher app (like **Franco Kernel Manager / EX Kernel Manager**).
    * Reboot your device.
-2. **NetHunter / USB Wi-Fi Drivers (Optional):**
-   * If you wish to use external USB Wi-Fi adapters or BadUSB HID injection, download the standalone **`BizarreKernel-NetHunter-Drivers.zip`** from the same Releases release assets.
-   * Open **KernelSU Manager** or **Magisk Manager** on your booted device.
-   * Go to Modules -> Install from storage, select **`BizarreKernel-NetHunter-Drivers.zip`**, flash, and reboot.
+
+---
+
+## 🗺️ Roadmap / TODO
+
+- [ ] **NetHunter Drivers Module** — Distribute high-performance wireless injection drivers (`ath9k_htc`, `rtl8187`, `rt2800usb`) and BadUSB HID injection support as a separate flashable KernelSU/Magisk module (`BizarreKernel-NetHunter-Drivers.zip`). Not included in current releases.
