@@ -304,6 +304,17 @@ jobs:
                         sed -i "s|KSU_VERSION_TAG_FALLBACK := v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*|KSU_VERSION_TAG_FALLBACK := $KSU_GIT_TAG|g" "$kfile" || true
                      fi
                    done
+
+                   # Force LKM mode flag so that GKI warning banner is not shown in Manager for ksu and ksu-susfs
+                   if [[ "${{ matrix.kernelsu }}" == "ksu" ]]; then
+                     for dispatch_file in drivers/kernelsu/supercall/dispatch.c drivers/kernelsu/kernel/supercall/dispatch.c; do
+                       if [[ -f "$dispatch_file" ]]; then
+                         echo "[+] Patching $dispatch_file to define KSU_GET_INFO_FLAG_LKM unconditionally..."
+                         sed -i 's/#ifdef MODULE/#if 1/g' "$dispatch_file" || true
+                       fi
+                     done
+                   fi
+
                    echo "✅ KSU setup complete"
 
             - name: Apply SUSFS patches
