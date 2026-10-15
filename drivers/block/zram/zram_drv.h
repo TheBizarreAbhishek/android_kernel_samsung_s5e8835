@@ -20,6 +20,10 @@
 #include <linux/crypto.h>
 #include <linux/mm.h>
 
+#ifdef CONFIG_ZRAM_MULTI_COMP
+#include <linux/workqueue.h>
+#endif
+
 #include "zcomp.h"
 
 #define SECTORS_PER_PAGE_SHIFT	(PAGE_SHIFT - SECTOR_SHIFT)
@@ -56,6 +60,10 @@ enum zram_pageflags {
 	ZRAM_PPR,
 	ZRAM_UNDER_PPR,
 	ZRAM_LRU,
+#ifdef CONFIG_ZRAM_MULTI_COMP
+	ZRAM_RECOMP,
+	ZRAM_RECOMP_SKIP,
+#endif
 
 	__NR_ZRAM_PAGEFLAGS,
 };
@@ -114,6 +122,10 @@ struct zram_stats {
 	atomic64_t bd_objwrites;
 	atomic64_t lru_pages;
 #endif
+#ifdef CONFIG_ZRAM_MULTI_COMP
+	atomic64_t recomp_pages;
+	atomic64_t recomp_huge_pages;
+#endif
 };
 
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
@@ -162,6 +174,12 @@ struct zram {
 	struct zram_table_entry *table;
 	struct zs_pool *mem_pool;
 	struct zcomp *comp;
+#ifdef CONFIG_ZRAM_MULTI_COMP
+	struct zcomp *recomp;
+	char recomp_compressor[CRYPTO_MAX_ALG_NAME];
+	bool auto_recomp;
+	struct delayed_work recomp_dwork;
+#endif
 	struct gendisk *disk;
 	/* Prevent concurrent execution of device init */
 	struct rw_semaphore init_lock;
