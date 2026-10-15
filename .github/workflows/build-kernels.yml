@@ -381,6 +381,11 @@ jobs:
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZSMALLOC
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZRAM
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZRAM_MULTI_COMP
+                  ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_CPU_FREQ_GOV_ENERGYAWARE
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_TCP_CONG_BBR
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_DEFAULT_BBR
+                  ./scripts/config --file arch/arm64/configs/custom.config --set-str CONFIG_DEFAULT_TCP_CONG "bbr"
 
                   if [[ "${{ matrix.permissive }}" == "true" ]]; then
                     echo "⚙️ Enabling Permissive Mode..."
