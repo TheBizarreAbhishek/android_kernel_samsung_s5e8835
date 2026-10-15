@@ -55,6 +55,16 @@ config ZRAM_DEF_COMP
 	default "lz4hc" if ZRAM_DEF_COMP_LZ4HC
 	default "842" if ZRAM_DEF_COMP_842
 
+config ZRAM_MULTI_COMP
+	bool "Enable multiple compression streams (recompression)"
+	depends on ZRAM
+	default y
+	help
+	  This enables multi-compression streams (recompression) support
+	  for zram devices. Primary algorithm handles initial fast writes (e.g. lz4),
+	  while secondary algorithm (e.g. zstd) handles recompressing idle
+	  and huge pages to save additional memory.
+
 config ZRAM_WRITEBACK
        bool "Write back incompressible or idle page to backing device"
        depends on ZRAM
