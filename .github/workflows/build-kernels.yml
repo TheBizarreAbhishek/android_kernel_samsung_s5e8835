@@ -377,6 +377,7 @@ jobs:
                   # Base config options
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_SLUB_DEBUG
                   ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_SCHED_AUTOGROUP
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_LRU_GEN_ENABLED
 
                   if [[ "${{ matrix.permissive }}" == "true" ]]; then
                     echo "⚙️ Enabling Permissive Mode..."
