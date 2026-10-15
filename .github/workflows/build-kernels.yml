@@ -180,9 +180,9 @@ jobs:
                       curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s dev-susfs
                       echo "✅ KernelSU-Next (pershoot dev-susfs) driver ready"
                     else
-                      echo "🔧 Integrating KernelSU Next (pershoot next)..."
-                      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-                      echo "✅ KernelSU-Next (pershoot next) driver ready"
+                      echo "🔧 Integrating KernelSU Next (official next)..."
+                      curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+                      echo "✅ KernelSU-Next (official next) driver ready"
                     fi
                   elif [[ "${{ matrix.kernelsu }}" == "resukisu" ]]; then
                     echo "🔧 Integrating ReSukiSU..."
