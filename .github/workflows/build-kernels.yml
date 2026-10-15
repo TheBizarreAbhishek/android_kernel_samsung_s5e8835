@@ -310,10 +310,19 @@ jobs:
                      for dispatch_file in drivers/kernelsu/supercall/dispatch.c drivers/kernelsu/kernel/supercall/dispatch.c; do
                        if [[ -f "$dispatch_file" ]]; then
                          echo "[+] Patching $dispatch_file to define KSU_GET_INFO_FLAG_LKM unconditionally..."
-                         sed -i 's/#ifdef MODULE/#if 1/g' "$dispatch_file" || true
+                         sed -i 's/\.flags = 0/\.flags = KSU_GET_INFO_FLAG_LKM/g' "$dispatch_file" || true
+                         sed -i 's/if (ksu_bundled)/if (0)/g' "$dispatch_file" || true
                        fi
                      done
                    fi
+
+                   # Fix Samsung KDP rlimit_type enum mismatch in pershoot dev-susfs for Linux 5.15 ACK
+                   for kdp_file in drivers/kernelsu/compat/samsung_kdp.c drivers/kernelsu/kernel/compat/samsung_kdp.c; do
+                     if [[ -f "$kdp_file" ]]; then
+                       echo "[+] Patching $kdp_file: replacing enum rlimit_type with enum ucount_type..."
+                       sed -i 's/enum rlimit_type/enum ucount_type/g' "$kdp_file" || true
+                     fi
+                   done
 
                    echo "✅ KSU setup complete"
 
