@@ -51,6 +51,7 @@
 
 #ifdef CONFIG_ZRAM_MULTI_COMP
 #include <linux/fb.h>
+#include <linux/suspend.h>
 #include <linux/notifier.h>
 #include <linux/workqueue.h>
 #include <linux/delay.h>
@@ -65,6 +66,11 @@ static int zram_fb_notifier_callback(struct notifier_block *self,
 				    unsigned long event, void *data);
 static struct notifier_block zram_fb_nb = {
 	.notifier_call = zram_fb_notifier_callback,
+};
+static int zram_pm_notifier_callback(struct notifier_block *self,
+				    unsigned long event, void *data);
+static struct notifier_block zram_pm_nb = {
+	.notifier_call = zram_pm_notifier_callback,
 };
 #endif
 
@@ -2920,6 +2926,38 @@ static int zram_fb_notifier_callback(struct notifier_block *self,
 	return 0;
 }
 
+static int zram_pm_notifier_callback(struct notifier_block *self,
+				    unsigned long event, void *data)
+{
+	struct zram *zram;
+	int id;
+
+	switch (event) {
+	case PM_SUSPEND_PREPARE:
+		atomic_set(&zram_screen_blanked, 1);
+		mutex_lock(&zram_index_mutex);
+		idr_for_each_entry(&zram_index_idr, zram, id) {
+			if (zram->auto_recomp)
+				schedule_delayed_work(&zram->recomp_dwork,
+						      msecs_to_jiffies(auto_recomp_delay_ms));
+		}
+		mutex_unlock(&zram_index_mutex);
+		break;
+	case PM_POST_SUSPEND:
+		atomic_set(&zram_screen_blanked, 0);
+		mutex_lock(&zram_index_mutex);
+		idr_for_each_entry(&zram_index_idr, zram, id) {
+			cancel_delayed_work(&zram->recomp_dwork);
+		}
+		mutex_unlock(&zram_index_mutex);
+		break;
+	default:
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
 static ssize_t recompress_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t len)
@@ -4394,6 +4432,7 @@ static int __init zram_init(void)
 
 #ifdef CONFIG_ZRAM_MULTI_COMP
 	fb_register_client(&zram_fb_nb);
+	register_pm_notifier(&zram_pm_nb);
 #endif
 
 	return 0;
@@ -4406,6 +4445,7 @@ out_error:
 static void __exit zram_exit(void)
 {
 #ifdef CONFIG_ZRAM_MULTI_COMP
+	unregister_pm_notifier(&zram_pm_nb);
 	fb_unregister_client(&zram_fb_nb);
 #endif
 	destroy_devices();

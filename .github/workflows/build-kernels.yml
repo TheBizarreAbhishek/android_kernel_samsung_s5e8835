@@ -378,6 +378,8 @@ jobs:
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_SLUB_DEBUG
                   ./scripts/config --file arch/arm64/configs/custom.config --disable CONFIG_SCHED_AUTOGROUP
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_LRU_GEN_ENABLED
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZSMALLOC
+                  ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZRAM
                   ./scripts/config --file arch/arm64/configs/custom.config --enable CONFIG_ZRAM_MULTI_COMP
 
                   if [[ "${{ matrix.permissive }}" == "true" ]]; then
