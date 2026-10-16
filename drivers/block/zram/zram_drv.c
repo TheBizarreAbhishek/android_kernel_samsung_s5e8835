@@ -2925,9 +2925,14 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 	if (zram_recomp_ws)
 		__pm_relax(zram_recomp_ws);
 
-	/* Reschedule periodically every 10 minutes if screen remains blanked */
-	if (atomic_read(&zram_screen_blanked) && zram->auto_recomp)
-		schedule_delayed_work(&zram->recomp_dwork, msecs_to_jiffies(600000));
+	/*
+	 * One-shot screen-off sweep: Recompression has completed for this
+	 * screen-off cycle. We deliberately do NOT reschedule periodically
+	 * while the screen remains off, avoiding unnecessary wakeups, CPU loops,
+	 * or battery drain during deep sleep. A new sweep will be scheduled
+	 * only after the user turns the screen on, uses the device, and turns
+	 * the screen off again.
+	 */
 }
 
 static int zram_fb_notifier_callback(struct notifier_block *self,
