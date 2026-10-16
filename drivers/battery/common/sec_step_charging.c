@@ -160,7 +160,8 @@ bool sec_bat_check_step_charging(struct sec_battery_info *battery)
 
 	pr_info("%s\n", __func__);
 
-	if (battery->siop_level < 100 || battery->lcd_status)
+	/* Screen-On Fast Charging: Ignore lcd_status for step charging */
+	if (battery->siop_level < 100)
 		lcd_status = 1;
 	else
 		lcd_status = 0;
@@ -354,7 +355,8 @@ bool sec_bat_check_wpc_step_charging(struct sec_battery_info *battery)
 		battery->pdata->wpc_step_chg_cond[0][0] = battery->test_step_condition;
 #endif
 
-	if (battery->siop_level < 100 || battery->lcd_status)
+	/* Screen-On Fast Charging: Ignore lcd_status for step charging */
+	if (battery->siop_level < 100)
 		lcd_status = 1;
 	else
 		lcd_status = 0;
@@ -582,7 +584,7 @@ bool sec_bat_check_dc_step_charging(struct sec_battery_info *battery)
 		while (step_soc < battery->dc_step_chg_step - 1) {
 			soc_condition = battery->pdata->dc_step_chg_cond_soc[age_step][step_soc];
 			if (battery->step_chg_status >= 0 &&
-				(battery->siop_level < 100 || battery->lcd_status)) {
+				battery->siop_level < 100) {
 				soc_condition += DIRECT_CHARGING_FORCE_SOC_MARGIN;
 				force_change_step = true;
 			}
@@ -668,7 +670,7 @@ bool sec_bat_check_dc_step_charging(struct sec_battery_info *battery)
 			pr_info("%s : dc no charging status = %d\n", __func__, val.intval);
 			battery->dc_step_chg_iin_cnt = 0;
 			return false;
-		} else if (battery->siop_level >= 100 && !battery->lcd_status) {
+		} else if (battery->siop_level >= 100) {
 			val.intval = SEC_BATTERY_IIN_MA;
 			psy_do_property(battery->pdata->charger_name, get,
 					POWER_SUPPLY_EXT_PROP_MEASURE_INPUT, val);
@@ -707,7 +709,7 @@ bool sec_bat_check_dc_step_charging(struct sec_battery_info *battery)
 			pr_info("%s : dc no charging status = %d\n", __func__, val.intval);
 			battery->dc_step_chg_iin_cnt = 0;
 			return false;
-		} else if (battery->siop_level >= 100 && !battery->lcd_status) {
+		} else if (battery->siop_level >= 100) {
 			int current_now, current_avg;
 
 			val.intval = SEC_BATTERY_CURRENT_MA;
@@ -771,7 +773,7 @@ check_dc_step_change:
 			(STEP_CHARGING_CONDITION_INPUT_CURRENT | STEP_CHARGING_CONDITION_FG_CURRENT)) &&
 			(battery->step_chg_status >= 0)) {
 			if ((battery->dc_step_chg_iin_cnt < battery->pdata->dc_step_chg_iin_check_cnt) &&
-				(battery->siop_level >= 100 && !battery->lcd_status) && !force_step_soc) {
+				(battery->siop_level >= 100) && !force_step_soc) {
 				pr_info("%s : keep step(%d), curr_cnt(%d/%d)\n",
 					__func__, battery->step_chg_status,
 					battery->dc_step_chg_iin_cnt, battery->pdata->dc_step_chg_iin_check_cnt);
@@ -1383,8 +1385,8 @@ void sec_step_charging_dt(struct sec_battery_info *battery, struct device *dev)
 	u32 *soc_cond_temp, *vfloat_temp, *curr_temp;
 	int num_age_step = battery->pdata->num_age_step;
 
-	battery->step_charging_skip_lcd_on = of_property_read_bool(np,
-						     "battery,step_charging_skip_lcd_on");
+	/* Screen-On Fast Charging: Never skip step charging when screen is on */
+	battery->step_charging_skip_lcd_on = false;
 
 	battery->step_chg_en_in_factory = of_property_read_bool(np,
 						     "battery,step_chg_en_in_factory");

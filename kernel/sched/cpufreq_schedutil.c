@@ -734,7 +734,19 @@ static int sugov_init(struct cpufreq_policy *policy)
 		goto stop_kthread;
 	}
 
+#ifdef CONFIG_ARM64
+	/*
+	 * Optimize schedutil rate limits for 120Hz display responsiveness:
+	 * Cortex-A78 big cores (CPU 4-7) rate limit = 2000 us (2ms) for zero-stutter UI.
+	 * Cortex-A55 LITTLE cores (CPU 0-3) rate limit = 5000 us (5ms) for balanced power efficiency.
+	 */
+	if (policy->cpu >= 4)
+		tunables->rate_limit_us = 2000;
+	else
+		tunables->rate_limit_us = 5000;
+#else
 	tunables->rate_limit_us = cpufreq_policy_transition_delay_us(policy);
+#endif
 
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;

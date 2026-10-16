@@ -19,14 +19,17 @@ A clean, high-performance, and battery-optimized custom kernel designed for Sams
 
 ### ⚡ Performance & Battery
 * **Default Schedutil Governor:** Energy-Aware Scheduling on all CPU clusters for buttery-smooth 120Hz responsiveness.
+* **120Hz Schedutil Big-Core Tuning:** Big Cortex-A78 cluster tuned to 2ms rate-limit for instantaneous frame response without micro-stutters.
+* **Screen-On Fast Charging Bypass:** Bypassed Samsung screen-on charging throttling to maintain full 25W fast charging while using the device.
 * **Power-Efficient Workqueues:** Automatically routes background kernel tasks to energy-saving LITTLE cores to maximize Screen-On-Time (SOT).
 * **Stripped Samsung Debug Overhead:** Disabled Samsung `SEC_DEBUG`, ACPM logging, and IRQ traces to eliminate boot and UI micro-stutters.
 * **Multiple Scaling Governors:** Choice of `schedutil` (default), `ondemand`, `conservative`, `powersave`, and `performance`.
 
-### 🧠 Memory Management
+### 🧠 Memory & Storage
 * **Dual-Stage ZRAM (LZ4 + ZSTD):** Fast `lz4` for zero-latency foreground use + automatic `zstd` recompression on screen-off (achieves 4.3x+ compression, freeing ~1.8GB RAM).
 * **Multi-Gen LRU (MGLRU):** Enabled by default to keep frequently used apps alive and eliminate reload delays.
 * **Kernel Samepage Merging (KSM):** Built-in page deduplication engine (`CONFIG_KSM=y`) that merges duplicate RAM pages across apps to save extra memory.
+* **512KB UFS Read-Ahead Buffer:** Quadrupled default block storage read-ahead buffer from 128KB to 512KB for faster cold app launches and asset loading.
 * **1-Flash TWRP Compatibility:** Built-in monolithic ZRAM architecture that works out-of-the-box even with broken `/data` decryption in recovery.
 
 ### 🌐 Networking & Connectivity
