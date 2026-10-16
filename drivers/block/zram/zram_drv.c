@@ -3015,7 +3015,10 @@ static int zram_panel_notifier_callback(struct notifier_block *self,
 	if (event != PANEL_EVENT_PANEL_STATE_CHANGED || !evdata)
 		return 0;
 
-	if (evdata->state == PANEL_EVENT_PANEL_STATE_OFF) {
+	if (evdata->state == PANEL_EVENT_PANEL_STATE_OFF ||
+	    evdata->state == PANEL_EVENT_PANEL_STATE_LPM) {
+		pr_info("Bizarre ZRAM: panel blanked/LPM (state=%d), scheduling recompression in %u ms\n",
+			evdata->state, auto_recomp_delay_ms);
 		atomic_set(&zram_screen_blanked, 1);
 		mutex_lock(&zram_index_mutex);
 		idr_for_each_entry(&zram_index_idr, zram, id) {
@@ -3025,6 +3028,7 @@ static int zram_panel_notifier_callback(struct notifier_block *self,
 		}
 		mutex_unlock(&zram_index_mutex);
 	} else if (evdata->state == PANEL_EVENT_PANEL_STATE_ON) {
+		pr_info("Bizarre ZRAM: panel unblanked (state=ON), cancelling recompression\n");
 		atomic_set(&zram_screen_blanked, 0);
 		mutex_lock(&zram_index_mutex);
 		idr_for_each_entry(&zram_index_idr, zram, id) {
@@ -3119,9 +3123,16 @@ static ssize_t auto_recomp_store(struct device *dev,
 	return len;
 }
 
+static ssize_t screen_blanked_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", atomic_read(&zram_screen_blanked));
+}
+
 static DEVICE_ATTR_RW(recomp_algorithm);
 static DEVICE_ATTR_WO(recompress);
 static DEVICE_ATTR_RW(auto_recomp);
+static DEVICE_ATTR_RO(screen_blanked);
 #endif
 
 static ssize_t compact_store(struct device *dev,
@@ -4190,6 +4201,7 @@ static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_recomp_algorithm.attr,
 	&dev_attr_recompress.attr,
 	&dev_attr_auto_recomp.attr,
+	&dev_attr_screen_blanked.attr,
 #endif
 #ifdef CONFIG_ZRAM_WRITEBACK
 	&dev_attr_backing_dev.attr,
