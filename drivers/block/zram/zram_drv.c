@@ -55,11 +55,16 @@
 #include <linux/notifier.h>
 #include <linux/workqueue.h>
 #include <linux/delay.h>
+#include <linux/pm_wakeup.h>
+#if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
+#include <linux/sec_panel_notifier_v2.h>
+#endif
 
+static struct wakeup_source *zram_recomp_ws;
 static atomic_t zram_screen_blanked = ATOMIC_INIT(0);
-static unsigned int auto_recomp_delay_ms = 180000;
+static unsigned int auto_recomp_delay_ms = 15000;
 module_param(auto_recomp_delay_ms, uint, 0644);
-MODULE_PARM_DESC(auto_recomp_delay_ms, "Delay in ms before starting screen-off recompression (default: 180000)");
+MODULE_PARM_DESC(auto_recomp_delay_ms, "Delay in ms before starting screen-off recompression (default: 15000)");
 
 static void zram_auto_recomp_work_fn(struct work_struct *work);
 static int zram_fb_notifier_callback(struct notifier_block *self,
@@ -72,6 +77,13 @@ static int zram_pm_notifier_callback(struct notifier_block *self,
 static struct notifier_block zram_pm_nb = {
 	.notifier_call = zram_pm_notifier_callback,
 };
+#if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
+static int zram_panel_notifier_callback(struct notifier_block *self,
+					unsigned long event, void *data);
+static struct notifier_block zram_panel_nb = {
+	.notifier_call = zram_panel_notifier_callback,
+};
+#endif
 #endif
 
 #define NON_LRU_SWAPPINESS 99
@@ -2874,6 +2886,8 @@ out_free:
 static void zram_auto_recomp_work_fn(struct work_struct *work)
 {
 	struct zram *zram = container_of(to_delayed_work(work), struct zram, recomp_dwork);
+	unsigned long nr_pages;
+	unsigned long index;
 
 	if (!atomic_read(&zram_screen_blanked))
 		return;
@@ -2881,8 +2895,24 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 	if (!zram->auto_recomp)
 		return;
 
+	if (zram_recomp_ws)
+		__pm_stay_awake(zram_recomp_ws);
+
 	down_read(&zram->init_lock);
 	if (init_done(zram) && zram->recomp) {
+		nr_pages = zram->disksize >> PAGE_SHIFT;
+
+		/* Mark candidate allocated pages as idle so idle sweep can recompress them */
+		for (index = 0; index < nr_pages; index++) {
+			if (!atomic_read(&zram_screen_blanked))
+				break;
+			zram_slot_lock(zram, index);
+			if (zram_allocated(zram, index) &&
+			    !zram_test_flag(zram, index, ZRAM_UNDER_WB))
+				zram_set_flag(zram, index, ZRAM_IDLE);
+			zram_slot_unlock(zram, index);
+		}
+
 		pr_info("Starting idle screen-off recompression with %s\n",
 			zram->recomp_compressor);
 		zram_recompress_sweep(zram, RECOMP_ALL, 0, true);
@@ -2891,6 +2921,13 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 			(s64)atomic64_read(&zram->stats.recomp_huge_pages));
 	}
 	up_read(&zram->init_lock);
+
+	if (zram_recomp_ws)
+		__pm_relax(zram_recomp_ws);
+
+	/* Reschedule periodically every 10 minutes if screen remains blanked */
+	if (atomic_read(&zram_screen_blanked) && zram->auto_recomp)
+		schedule_delayed_work(&zram->recomp_dwork, msecs_to_jiffies(600000));
 }
 
 static int zram_fb_notifier_callback(struct notifier_block *self,
@@ -2961,6 +2998,39 @@ static int zram_pm_notifier_callback(struct notifier_block *self,
 
 	return NOTIFY_OK;
 }
+
+#if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
+static int zram_panel_notifier_callback(struct notifier_block *self,
+					unsigned long event, void *data)
+{
+	struct panel_notifier_event_data *evdata = data;
+	struct zram *zram;
+	int id;
+
+	if (event != PANEL_EVENT_PANEL_STATE_CHANGED || !evdata)
+		return 0;
+
+	if (evdata->state == PANEL_EVENT_PANEL_STATE_OFF) {
+		atomic_set(&zram_screen_blanked, 1);
+		mutex_lock(&zram_index_mutex);
+		idr_for_each_entry(&zram_index_idr, zram, id) {
+			if (zram->auto_recomp)
+				schedule_delayed_work(&zram->recomp_dwork,
+						      msecs_to_jiffies(auto_recomp_delay_ms));
+		}
+		mutex_unlock(&zram_index_mutex);
+	} else if (evdata->state == PANEL_EVENT_PANEL_STATE_ON) {
+		atomic_set(&zram_screen_blanked, 0);
+		mutex_lock(&zram_index_mutex);
+		idr_for_each_entry(&zram_index_idr, zram, id) {
+			cancel_delayed_work(&zram->recomp_dwork);
+		}
+		mutex_unlock(&zram_index_mutex);
+	}
+
+	return 0;
+}
+#endif
 
 static ssize_t recompress_store(struct device *dev,
 			       struct device_attribute *attr,
@@ -4435,8 +4505,12 @@ static int __init zram_init(void)
 	}
 
 #ifdef CONFIG_ZRAM_MULTI_COMP
+	zram_recomp_ws = wakeup_source_register(NULL, "zram_auto_recomp");
 	fb_register_client(&zram_fb_nb);
 	register_pm_notifier(&zram_pm_nb);
+#if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
+	panel_notifier_register(&zram_panel_nb);
+#endif
 #endif
 
 	return 0;
@@ -4449,8 +4523,13 @@ out_error:
 static void __exit zram_exit(void)
 {
 #ifdef CONFIG_ZRAM_MULTI_COMP
+#if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
+	panel_notifier_unregister(&zram_panel_nb);
+#endif
 	unregister_pm_notifier(&zram_pm_nb);
 	fb_unregister_client(&zram_fb_nb);
+	if (zram_recomp_ws)
+		wakeup_source_unregister(zram_recomp_ws);
 #endif
 	destroy_devices();
 }
