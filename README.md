@@ -30,6 +30,9 @@ A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e
 * **BBRv3 TCP Default:** Google's latest BBRv3 (Bottleneck Bandwidth and RTT version 3) congestion control enabled as the default TCP algorithm for ultra-low latency, reduced bufferbloat, and maximum throughput over Wi-Fi and 5G cellular networks.
 * **1-Flash Plug-and-Play (Broken TWRP Compatible):** Built-in monolithic ZRAM architecture with kernel-level DLKM intercept (`kernel/module.c`) allows flashing via AnyKernel3 without requiring broken `/data` decryption in TWRP.
 * **NTSYNC:** Backported Windows NT synchronization primitives driver helper for high-performance wine/proton gaming.
+* **Kernel Samepage Merging (KSM):** Built-in page deduplication engine (`CONFIG_KSM=y`) to scan and merge identical memory pages across running apps, saving 200MB-500MB of physical RAM.
+* **Power-Efficient Workqueues:** Enabled by default (`CONFIG_WQ_POWER_EFFICIENT_DEFAULT=y`) to route non-critical kernel workqueues to energy-efficient Cortex-A55 LITTLE cores, reducing idle power draw and boosting battery life.
+* **Carrier Hotspot & Tethering Bypass:** Enabled netfilter TTL and Hop Limit targets (`CONFIG_NETFILTER_XT_TARGET_HL=y`, `CONFIG_IP_NF_TARGET_TTL=y`) for easy carrier hotspot restriction bypass via iptables.
 * **Reduced Overhead:** Disabled Samsung `SEC_DEBUG`, verbose ACPM power management logging, spurious IRQs logging, and block IO stats, reducing CPU overhead and eliminating boot/UI lag.
 * **Governor Support:** Enabled `schedutil` (default), `ondemand`, `conservative`, `powersave`, and `performance` CPU scaling governors.
 
