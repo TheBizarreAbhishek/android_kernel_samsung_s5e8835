@@ -1283,7 +1283,7 @@ static void handle_decomp_fail(char *comp, int err, u32 index, void *src,
 	if (is_marker_err)
 		BUG();
 	else
-		panic("zram decomp failed");
+		pr_err("%s: decompression failed, skipping panic to prevent reboot\n", __func__);
 }
 
 static int zram_writeback_fill_page(struct zram *zram, u32 index,
@@ -1302,6 +1302,9 @@ static int zram_writeback_fill_page(struct zram *zram, u32 index,
 			!zram_test_flag(zram, index, ZRAM_IDLE) ||
 			zram_test_flag(zram, index, ZRAM_WB) ||
 			zram_test_flag(zram, index, ZRAM_SAME) ||
+#ifdef CONFIG_ZRAM_MULTI_COMP
+			zram_test_flag(zram, index, ZRAM_RECOMP) ||
+#endif
 			zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
 		zram_slot_unlock(zram, index);
 		return 0;
@@ -1975,6 +1978,9 @@ static ssize_t writeback_store(struct device *dev,
 
 		if (zram_test_flag(zram, index, ZRAM_WB) ||
 				zram_test_flag(zram, index, ZRAM_SAME) ||
+#ifdef CONFIG_ZRAM_MULTI_COMP
+				zram_test_flag(zram, index, ZRAM_RECOMP) ||
+#endif
 				zram_test_flag(zram, index, ZRAM_UNDER_WB))
 			goto next;
 
