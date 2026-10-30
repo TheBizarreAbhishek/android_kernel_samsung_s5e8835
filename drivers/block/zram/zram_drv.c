@@ -1628,21 +1628,40 @@ retry:
 	return ret;
 }
 
-static void zram_comp_writeback(struct zram *zram)
+static void zram_comp_writeback(struct zram *zram, bool check_screen)
 {
 	struct zram_writeback_buffer *buf = NULL;
 	unsigned long nr_pages = zram->disksize >> PAGE_SHIFT;
 	unsigned long index;
+	unsigned int processed = 0;
 
 	for (index = 0; index < nr_pages; index++) {
+#ifdef CONFIG_ZRAM_MULTI_COMP
+		if (check_screen && !atomic_read(&zram_screen_blanked))
+			break;
+#else
+		(void)check_screen;
+#endif
 		if (!zram_wb_available(zram))
 			break;
 		if (zram_writeback_index(zram, index, &buf, false))
 			break;
+
+		if (++processed % 16 == 0) {
+#ifdef CONFIG_ZRAM_MULTI_COMP
+			if (check_screen && !atomic_read(&zram_screen_blanked))
+				break;
+#endif
+			cond_resched();
+		}
 	}
 	if (buf) {
-		mark_end_of_page(buf->zwbs[buf->idx]);
-		zram_writeback_page(zram, buf, false);
+		if (buf->idx > 0 || buf->zwbs[buf->idx]->cnt > 0) {
+			mark_end_of_page(buf->zwbs[buf->idx]);
+			zram_writeback_page(zram, buf, false);
+		} else {
+			free_writeback_buffer(buf);
+		}
 	}
 	pr_info("%s done", __func__);
 }
@@ -1937,7 +1956,7 @@ static ssize_t writeback_store(struct device *dev,
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
 	if (mode == IDLE_WRITEBACK) {
 		if (zram_wb_available(zram))
-			zram_comp_writeback(zram);
+			zram_comp_writeback(zram, false);
 		ret = len;
 		goto release_init_lock;
 	}
@@ -2905,10 +2924,10 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 		__pm_stay_awake(zram_recomp_ws);
 
 	down_read(&zram->init_lock);
-	if (init_done(zram) && zram->recomp) {
+	if (init_done(zram)) {
 		nr_pages = zram->disksize >> PAGE_SHIFT;
 
-		/* Mark candidate allocated pages as idle so idle sweep can recompress them */
+		/* Mark candidate allocated pages as idle so idle sweep can recompress / writeback them */
 		for (index = 0; index < nr_pages; index++) {
 			if (!atomic_read(&zram_screen_blanked))
 				break;
@@ -2917,14 +2936,43 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 			    !zram_test_flag(zram, index, ZRAM_UNDER_WB))
 				zram_set_flag(zram, index, ZRAM_IDLE);
 			zram_slot_unlock(zram, index);
+
+			if ((index & 4095) == 0)
+				cond_resched();
 		}
 
-		pr_info("Starting idle screen-off recompression with %s\n",
-			zram->recomp_compressor);
-		zram_recompress_sweep(zram, RECOMP_ALL, 0, true);
-		pr_info("Idle screen-off recompression finished (recomp_pages=%lld, recomp_huge=%lld)\n",
-			(s64)atomic64_read(&zram->stats.recomp_pages),
-			(s64)atomic64_read(&zram->stats.recomp_huge_pages));
+		/* Stage 1: Secondary Recompression (zstd) */
+		if (zram->recomp && atomic_read(&zram_screen_blanked)) {
+			pr_info("Bizarre ZRAM: Starting idle screen-off recompression with %s\n",
+				zram->recomp_compressor);
+			zram_recompress_sweep(zram, RECOMP_ALL, 0, true);
+			pr_info("Bizarre ZRAM: Idle screen-off recompression finished (recomp_pages=%lld, recomp_huge=%lld)\n",
+				(s64)atomic64_read(&zram->stats.recomp_pages),
+				(s64)atomic64_read(&zram->stats.recomp_huge_pages));
+		}
+
+		/* Stage 2: Incompressible / Cold Page Writeback to backing storage */
+#if defined(CONFIG_ZRAM_WRITEBACK) && defined(CONFIG_ZRAM_LRU_WRITEBACK)
+		if (zram->backing_dev && atomic_read(&zram_screen_blanked)) {
+			if (zram_wb_available(zram)) {
+				pr_info("Bizarre ZRAM: Starting idle screen-off writeback to backing storage\n");
+				zram_comp_writeback(zram, true);
+				pr_info("Bizarre ZRAM: Idle screen-off writeback finished (bd_writes=%lld, bd_size=%lld)\n",
+					(s64)atomic64_read(&zram->stats.bd_writes),
+					(s64)atomic64_read(&zram->stats.bd_size));
+			}
+		}
+#endif
+
+		/* Stage 3: ZRAM Memory Compaction (Defragmentation) */
+		if (atomic_read(&zram_screen_blanked)) {
+			unsigned long pages_freed;
+
+			pr_info("Bizarre ZRAM: Starting idle screen-off memory compaction\n");
+			pages_freed = zs_compact(zram->mem_pool);
+			pr_info("Bizarre ZRAM: Idle screen-off memory compaction finished (freed %lu pages)\n",
+				pages_freed);
+		}
 	}
 	up_read(&zram->init_lock);
 
