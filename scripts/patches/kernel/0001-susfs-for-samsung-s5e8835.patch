@@ -2244,7 +2244,7 @@ index 000000000000..681efc352e63
 @@ -0,0 +1,1950 @@
 +#include <linux/version.h>
 +struct selinux_policy;
-+struct selinux_policy __attribute__((weak)) *backup_sepolicy = NULL;
++struct selinux_policy __attribute__((weak)) *backup_sepolicy;
 +#include <linux/cred.h>
 +#include <linux/fs.h>
 +#include <linux/slab.h>
