@@ -3185,7 +3185,7 @@ index 82ac7003..c72fec84 100644
      }
      if (copy_to_user(arg, &cmd, sizeof(cmd))) {
          pr_err("manage_mark: copy_to_user failed\n");
-@@ -522,6 +486,87 @@ static int do_manage_mark(void __user *arg)
+@@ -522,6 +486,90 @@ static int do_manage_mark(void __user *arg)
      return 0;
  }
  
@@ -3247,6 +3247,9 @@ index 82ac7003..c72fec84 100644
 +                susfs_add_sus_map(arg);
 +                return 0;
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
++            case CMD_SUSFS_SET_PRIORITY_UID_FILTER:
++                susfs_set_priority_uid_filter(arg);
++                return 0;
 +            case CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING:
 +                susfs_set_avc_log_spoofing(arg);
 +                return 0;
