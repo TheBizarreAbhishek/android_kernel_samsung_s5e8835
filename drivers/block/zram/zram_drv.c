@@ -55,16 +55,23 @@
 #include <linux/notifier.h>
 #include <linux/workqueue.h>
 #include <linux/delay.h>
-#include <linux/pm_wakeup.h>
 #if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
 #include <linux/sec_panel_notifier_v2.h>
 #endif
 
-static struct wakeup_source *zram_recomp_ws;
 static atomic_t zram_screen_blanked = ATOMIC_INIT(0);
+static atomic_t zram_pm_suspending = ATOMIC_INIT(0);
 static unsigned int auto_recomp_delay_ms = 15000;
 module_param(auto_recomp_delay_ms, uint, 0644);
 MODULE_PARM_DESC(auto_recomp_delay_ms, "Delay in ms before starting screen-off recompression (default: 15000)");
+
+static inline bool zram_auto_recomp_should_stop(void)
+{
+	return !atomic_read(&zram_screen_blanked) ||
+	       atomic_read(&zram_pm_suspending) ||
+	       freezing(current) ||
+	       pm_freezing;
+}
 
 static void zram_auto_recomp_work_fn(struct work_struct *work);
 static int zram_fb_notifier_callback(struct notifier_block *self,
@@ -84,6 +91,11 @@ static struct notifier_block zram_panel_nb = {
 	.notifier_call = zram_panel_notifier_callback,
 };
 #endif
+#else
+static inline bool zram_auto_recomp_should_stop(void)
+{
+	return false;
+}
 #endif
 
 #define NON_LRU_SWAPPINESS 99
@@ -1636,24 +1648,24 @@ static void zram_comp_writeback(struct zram *zram, bool check_screen)
 	unsigned int processed = 0;
 
 	for (index = 0; index < nr_pages; index++) {
+		if ((index & 255) == 0) {
 #ifdef CONFIG_ZRAM_MULTI_COMP
-		if (check_screen && !atomic_read(&zram_screen_blanked))
-			break;
-#else
-		(void)check_screen;
+			if (check_screen && zram_auto_recomp_should_stop())
+				break;
 #endif
+			cond_resched();
+		}
+
 		if (!zram_wb_available(zram))
 			break;
 		if (zram_writeback_index(zram, index, &buf, false))
 			break;
 
-		if (++processed % 16 == 0) {
-#ifdef CONFIG_ZRAM_MULTI_COMP
-			if (check_screen && !atomic_read(&zram_screen_blanked))
-				break;
-#endif
+		if (check_screen && zram_auto_recomp_should_stop())
+			break;
+
+		if (++processed % 16 == 0)
 			cond_resched();
-		}
 	}
 	if (buf) {
 		if (buf->idx > 0 || buf->zwbs[buf->idx]->cnt > 0) {
@@ -2860,8 +2872,11 @@ static void zram_recompress_sweep(struct zram *zram, int mode, unsigned long thr
 	/* Stage 1: Huge Page Rescue */
 	if (mode & RECOMP_HUGE) {
 		for (index = 0; index < nr_pages; index++) {
-			if (check_screen && !atomic_read(&zram_screen_blanked))
-				goto out_free;
+			if ((index & 255) == 0) {
+				if (check_screen && zram_auto_recomp_should_stop())
+					goto out_free;
+				cond_resched();
+			}
 
 			if (!zram_allocated(zram, index))
 				continue;
@@ -2873,22 +2888,27 @@ static void zram_recompress_sweep(struct zram *zram, int mode, unsigned long thr
 
 			zram_recompress_page(zram, index, scratch_page);
 
-			if (++processed % 16 == 0) {
-				if (check_screen && !atomic_read(&zram_screen_blanked))
-					goto out_free;
+			if (check_screen && zram_auto_recomp_should_stop())
+				goto out_free;
+
+			if (++processed % 16 == 0)
 				cond_resched();
-			}
 		}
 	}
 
 	/* Stage 2: Idle Page Sweep */
 	if (mode & RECOMP_IDLE) {
 		for (index = 0; index < nr_pages; index++) {
-			if (check_screen && !atomic_read(&zram_screen_blanked))
-				goto out_free;
+			if ((index & 255) == 0) {
+				if (check_screen && zram_auto_recomp_should_stop())
+					goto out_free;
+				cond_resched();
+			}
 
-			if (!zram_allocated(zram, index) ||
-			    !zram_test_flag(zram, index, ZRAM_IDLE) ||
+			if (!zram_allocated(zram, index))
+				continue;
+
+			if (!zram_test_flag(zram, index, ZRAM_IDLE) ||
 			    zram_test_flag(zram, index, ZRAM_RECOMP) ||
 			    zram_test_flag(zram, index, ZRAM_RECOMP_SKIP))
 				continue;
@@ -2896,11 +2916,11 @@ static void zram_recompress_sweep(struct zram *zram, int mode, unsigned long thr
 			if (!threshold || zram_get_obj_size(zram, index) >= threshold)
 				zram_recompress_page(zram, index, scratch_page);
 
-			if (++processed % 16 == 0) {
-				if (check_screen && !atomic_read(&zram_screen_blanked))
-					goto out_free;
+			if (check_screen && zram_auto_recomp_should_stop())
+				goto out_free;
+
+			if (++processed % 16 == 0)
 				cond_resched();
-			}
 		}
 	}
 
@@ -2914,14 +2934,8 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 	unsigned long nr_pages;
 	unsigned long index;
 
-	if (!atomic_read(&zram_screen_blanked))
+	if (zram_auto_recomp_should_stop() || !zram->auto_recomp)
 		return;
-
-	if (!zram->auto_recomp)
-		return;
-
-	if (zram_recomp_ws)
-		__pm_stay_awake(zram_recomp_ws);
 
 	down_read(&zram->init_lock);
 	if (init_done(zram)) {
@@ -2929,20 +2943,21 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 
 		/* Mark candidate allocated pages as idle so idle sweep can recompress / writeback them */
 		for (index = 0; index < nr_pages; index++) {
-			if (!atomic_read(&zram_screen_blanked))
-				break;
+			if (zram_auto_recomp_should_stop())
+				goto out_unlock;
+
 			zram_slot_lock(zram, index);
 			if (zram_allocated(zram, index) &&
 			    !zram_test_flag(zram, index, ZRAM_UNDER_WB))
 				zram_set_flag(zram, index, ZRAM_IDLE);
 			zram_slot_unlock(zram, index);
 
-			if ((index & 4095) == 0)
+			if ((index & 255) == 0)
 				cond_resched();
 		}
 
 		/* Stage 1: Secondary Recompression (zstd) */
-		if (zram->recomp && atomic_read(&zram_screen_blanked)) {
+		if (zram->recomp && !zram_auto_recomp_should_stop()) {
 			pr_info("Bizarre ZRAM: Starting idle screen-off recompression with %s\n",
 				zram->recomp_compressor);
 			zram_recompress_sweep(zram, RECOMP_ALL, 0, true);
@@ -2953,7 +2968,7 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 
 		/* Stage 2: Incompressible / Cold Page Writeback to backing storage */
 #if defined(CONFIG_ZRAM_WRITEBACK) && defined(CONFIG_ZRAM_LRU_WRITEBACK)
-		if (zram->backing_dev && atomic_read(&zram_screen_blanked)) {
+		if (zram->backing_dev && !zram_auto_recomp_should_stop()) {
 			if (zram_wb_available(zram)) {
 				pr_info("Bizarre ZRAM: Starting idle screen-off writeback to backing storage\n");
 				zram_comp_writeback(zram, true);
@@ -2965,7 +2980,7 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 #endif
 
 		/* Stage 3: ZRAM Memory Compaction (Defragmentation) */
-		if (atomic_read(&zram_screen_blanked)) {
+		if (!zram_auto_recomp_should_stop()) {
 			unsigned long pages_freed;
 
 			pr_info("Bizarre ZRAM: Starting idle screen-off memory compaction\n");
@@ -2974,10 +2989,9 @@ static void zram_auto_recomp_work_fn(struct work_struct *work)
 				pages_freed);
 		}
 	}
-	up_read(&zram->init_lock);
 
-	if (zram_recomp_ws)
-		__pm_relax(zram_recomp_ws);
+out_unlock:
+	up_read(&zram->init_lock);
 
 	/*
 	 * One-shot screen-off sweep: Recompression has completed for this
@@ -3014,13 +3028,15 @@ static int zram_fb_notifier_callback(struct notifier_block *self,
 		mutex_unlock(&zram_index_mutex);
 	} else {
 		atomic_set(&zram_screen_blanked, 1);
-		mutex_lock(&zram_index_mutex);
-		idr_for_each_entry(&zram_index_idr, zram, id) {
-			if (zram->auto_recomp)
-				schedule_delayed_work(&zram->recomp_dwork,
-						      msecs_to_jiffies(auto_recomp_delay_ms));
+		if (!atomic_read(&zram_pm_suspending)) {
+			mutex_lock(&zram_index_mutex);
+			idr_for_each_entry(&zram_index_idr, zram, id) {
+				if (zram->auto_recomp)
+					schedule_delayed_work(&zram->recomp_dwork,
+							      msecs_to_jiffies(auto_recomp_delay_ms));
+			}
+			mutex_unlock(&zram_index_mutex);
 		}
-		mutex_unlock(&zram_index_mutex);
 	}
 
 	return 0;
@@ -3034,22 +3050,25 @@ static int zram_pm_notifier_callback(struct notifier_block *self,
 
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
-		atomic_set(&zram_screen_blanked, 1);
+	case PM_HIBERNATION_PREPARE:
+	case PM_RESTORE_PREPARE:
+		/*
+		 * Device is entering suspend. Immediately stop and cancel any
+		 * background recompression to prevent CPU starvation and avoid
+		 * tripping hardware/vendor lockup watchdogs (e.g. Samsung SSLD).
+		 */
+		atomic_set(&zram_pm_suspending, 1);
 		mutex_lock(&zram_index_mutex);
 		idr_for_each_entry(&zram_index_idr, zram, id) {
-			if (zram->auto_recomp)
-				schedule_delayed_work(&zram->recomp_dwork,
-						      msecs_to_jiffies(auto_recomp_delay_ms));
+			cancel_delayed_work_sync(&zram->recomp_dwork);
 		}
 		mutex_unlock(&zram_index_mutex);
 		break;
 	case PM_POST_SUSPEND:
-		atomic_set(&zram_screen_blanked, 0);
-		mutex_lock(&zram_index_mutex);
-		idr_for_each_entry(&zram_index_idr, zram, id) {
-			cancel_delayed_work(&zram->recomp_dwork);
-		}
-		mutex_unlock(&zram_index_mutex);
+	case PM_POST_HIBERNATION:
+	case PM_POST_RESTORE:
+		/* System has resumed. Clear suspend flag. */
+		atomic_set(&zram_pm_suspending, 0);
 		break;
 	default:
 		break;
@@ -3074,13 +3093,15 @@ static int zram_panel_notifier_callback(struct notifier_block *self,
 		pr_info("Bizarre ZRAM: panel blanked/LPM (state=%d), scheduling recompression in %u ms\n",
 			evdata->state, auto_recomp_delay_ms);
 		atomic_set(&zram_screen_blanked, 1);
-		mutex_lock(&zram_index_mutex);
-		idr_for_each_entry(&zram_index_idr, zram, id) {
-			if (zram->auto_recomp)
-				schedule_delayed_work(&zram->recomp_dwork,
-						      msecs_to_jiffies(auto_recomp_delay_ms));
+		if (!atomic_read(&zram_pm_suspending)) {
+			mutex_lock(&zram_index_mutex);
+			idr_for_each_entry(&zram_index_idr, zram, id) {
+				if (zram->auto_recomp)
+					schedule_delayed_work(&zram->recomp_dwork,
+							      msecs_to_jiffies(auto_recomp_delay_ms));
+			}
+			mutex_unlock(&zram_index_mutex);
 		}
-		mutex_unlock(&zram_index_mutex);
 	} else if (evdata->state == PANEL_EVENT_PANEL_STATE_ON) {
 		pr_info("Bizarre ZRAM: panel unblanked (state=ON), cancelling recompression\n");
 		atomic_set(&zram_screen_blanked, 0);
@@ -4576,7 +4597,6 @@ static int __init zram_init(void)
 	}
 
 #ifdef CONFIG_ZRAM_MULTI_COMP
-	zram_recomp_ws = wakeup_source_register(NULL, "zram_auto_recomp");
 	fb_register_client(&zram_fb_nb);
 	register_pm_notifier(&zram_pm_nb);
 #if IS_ENABLED(CONFIG_SEC_PANEL_NOTIFIER_V2)
@@ -4599,8 +4619,6 @@ static void __exit zram_exit(void)
 #endif
 	unregister_pm_notifier(&zram_pm_nb);
 	fb_unregister_client(&zram_fb_nb);
-	if (zram_recomp_ws)
-		wakeup_source_unregister(zram_recomp_ws);
 #endif
 	destroy_devices();
 }
