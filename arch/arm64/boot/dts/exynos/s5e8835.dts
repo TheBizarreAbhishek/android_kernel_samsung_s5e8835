@@ -556,6 +556,12 @@
 		ecs {
 		};
 
+		cpus_binding {
+			target-sched-class = <0x08>;
+			background = "0-3";
+			system-background = "0-3";
+		};
+
 		fclamp {
 
 			monitor-group {
@@ -612,6 +618,12 @@
 			monitor-group {
 				top-app = <0x01>;
 			};
+		};
+
+		cpus_binding {
+			target-sched-class = <0x08>;
+			background = "0-3";
+			system-background = "0-3";
 		};
 
 		cpufreq_gov {
@@ -746,6 +758,12 @@
 			dynamic-busy-ratio = <0x46 0x46>;
 		};
 
+		cpus_binding {
+			target-sched-class = <0x08>;
+			background = "0-3";
+			system-background = "0-3";
+		};
+
 		fclamp {
 
 			monitor-group {
@@ -830,6 +848,12 @@
 			};
 		};
 
+		cpus_binding {
+			target-sched-class = <0x08>;
+			background = "0-3";
+			system-background = "0-3";
+		};
+
 		cpufreq_gov {
 			htask-boost = <0x96 0x96>;
 		};
@@ -891,6 +915,7 @@
 		cpus_binding {
 			target-sched-class = <0x08>;
 			background = "0-3";
+			system-background = "0-3";
 		};
 
 		fclamp {
@@ -964,6 +989,12 @@
 
 		ecs_dynamic {
 			dynamic-busy-ratio = <0x46 0x46>;
+		};
+
+		cpus_binding {
+			target-sched-class = <0x08>;
+			background = "0-3";
+			system-background = "0-3";
 		};
 
 		fclamp {
@@ -1078,6 +1109,12 @@
 
 		ecs_dynamic {
 			dynamic-busy-ratio = <0x46 0x46>;
+		};
+
+		cpus_binding {
+			target-sched-class = <0x08>;
+			background = "0-3";
+			system-background = "0-3";
 		};
 
 		fclamp {
