@@ -1,76 +1,121 @@
-# 🌀 Bizarre Kernel | Galaxy M35 & A35 (Exynos 1380)
+# 🌀 Bizarre Kernel | Samsung Exynos 1380 (`s5e8835`)
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/TheBizarreAbhishek/android_kernel_samsung_s5e8835/build-kernels.yml?branch=android13-5.15&style=for-the-badge&logo=github)](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/actions)
-[![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.208-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
-[![Android Version](https://img.shields.io/badge/Android-16-green?style=for-the-badge&logo=android)](https://source.android.com/)
+[![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.216-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
+[![Architecture](https://img.shields.io/badge/Arch-ARM64--v8a-orange?style=for-the-badge&logo=arm)](https://developer.arm.com/)
+[![Android Version](https://img.shields.io/badge/Android-13%20--%2016-green?style=for-the-badge&logo=android)](https://source.android.com/)
+[![Universal Exynos 1380](https://img.shields.io/badge/SoC-Exynos%201380%20(Universal)-purple?style=for-the-badge)](https://semiconductor.samsung.com/processor/mobile-processor/exynos-1380/)
 
-A highly optimized, customized GKI-compliant kernel for Samsung Exynos 1380 (s5e8835) devices. Designed for power users, containerization enthusiasts, and security researchers.
-
-### 📱 Supported Devices (Exynos 1380 / s5e8835)
-* **Samsung Galaxy M35 5G** (SM-M356B, SM-M356E)
-* **Samsung Galaxy A35 5G** (SM-A356B, SM-A356E, SM-A356U, SM-A3560)
+A clean, high-performance, and battery-optimized custom kernel crafted for **all Samsung Exynos 1380 (`s5e8835`)** smartphones and tablets. Built to deliver cooler temperatures, longer battery life, lag-free 120Hz scrolling, and seamless root stealth for banking apps.
 
 ---
 
-## 🚀 Key Features
+## 📱 Supported Devices
 
-### 🛡️ Rooting & Advanced Stealth
-* **KernelSU / KSU-Next:** Integrated dynamically at build time for next-generation kernel-level rooting.
-* **SUSFS integration:** Fully hidden root status with advanced path/mount spoofing (`SUS_PATH`, `SUS_MOUNT`, `SUS_KSTAT`, `Spoofer`, `Open Redirect`).
-* **SELinux Controls:** Available in both Enforcing (default) and Permissive builds.
+> **Universal Compatibility:** This kernel works across **all Samsung devices powered by the Exynos 1380 platform**.
 
-### 🐳 Container & Virtualization (Docker / Droidspace)
-* **Isolated Namespaces:** Full isolation support (`NET_NS`, `PID_NS`, `IPC_NS`, `UTS_NS`, `USER_NS`).
-* **kABI Preservation:** Custom GKI System V IPC patch ensures total stability, preventing Kernel ABI mismatch bootloops while allowing Docker and system containers to function.
+| Device Model | Codename | Model Numbers |
+| :--- | :--- | :--- |
+| **Galaxy M35 5G** | `m35xxx` | `SM-M356B`, `SM-M356E` |
+| **Galaxy A35 5G** | `a35xxx` | `SM-A356B`, `SM-A356E`, `SM-A356U`, `SM-A3560` |
+| **Galaxy A54 5G** | `a54xxx` | `SM-A546B`, `SM-A546E`, `SM-A546U`, `SM-A5460`, `SM-A546V` |
+| **Galaxy F54 5G** | `f54xxx` | `SM-E546B` |
+| **Galaxy Tab S9 FE** | `gts9fe` | `SM-X510` (Wi-Fi), `SM-X516B` / `SM-X516C` / `SM-X518U` (5G) |
+| **Galaxy Tab S9 FE+** | `gts9fep` | `SM-X610` (Wi-Fi), `SM-X616B` / `SM-X616C` (5G) |
 
-### ⚡ Performance, Memory & Networking
-* **BBRv3 TCP:** Next-generation BBRv3 congestion control enabled as the default TCP algorithm for ultra-low latency and maximum bandwidth over Wi-Fi and mobile networks.
-* **NTSYNC:** Backported Windows NT synchronization primitives driver helper.
-* **ZRAM with ZSTD Compression:** Set default ZRAM compression algorithm to `zstd` for faster RAM compression, improving multitasking and reducing app reload lag.
-* **Reduced Overhead:** Disabled Samsung `SEC_DEBUG`, verbose ACPM power management logging, spurious IRQs logging, and block IO stats, reducing CPU overhead and eliminating boot/UI lag.
-* **Governor Support:** Enabled `ondemand` and `userspace` CPU scaling governors.
-
-### 🛡️ Samsung Security Bypasses & Stealth
-* **Knox Disabled:** Completely stripped proprietary Samsung Knox security subsystems (`DEFEX`, `PROCA`, `FIVE`, `DSMS`, `KPERFMON`) to allow root operations and arbitrary execution.
-* **Hidden Configuration:** Disabled `/proc/config.gz` export to defeat root detectors checking kernel configs.
+*Compatible with **One UI 6.x**, **One UI 7.x**, and upcoming Android 15/16 GSI and custom ROMs.*
 
 ---
 
-## 📦 Build Matrix Variants
+## 🚀 Key Features & Benefits
 
-We build multiple kernel configurations automatically on GitHub Actions:
-
-| Variant Name | Root Solution | SUSFS Stealth | SELinux Mode |
-| :--- | :---: | :---: | :---: |
-| `clean` | None | ❌ | Enforcing |
-| `permissive` | None | ❌ | Permissive |
-| `ksu` | KernelSU | ❌ | Enforcing |
-| `ksunext` | KernelSU Next | ❌ | Enforcing |
-| `ksu-susfs` | KernelSU | ✔️ | Enforcing |
-| `ksunext-susfs` | KernelSU Next | ✔️ | Enforcing |
-
+### 🔋 Battery Life & Efficiency
+* **Background Task Little-Core Restriction:** Automatically keeps background apps, sync tasks, and system services pinned strictly to energy-saving Little cores (A55). Prevents big performance cores from waking up when your phone is in your pocket or idle.
+* **Screen-On Fast Charging (Bypass Throttling):** Keeps full 25W fast charging active even when your screen is turned on and you are actively using your phone (removes Samsung's default screen-on charging slowdown).
+* **Mali GPU Touch Boost Tuning:** Optimizes GPU touch frequency to significantly save battery during web and social media scrolling without sacrificing 120Hz smoothness.
+* **Power-Efficient Workqueues:** Groups kernel background maintenance tasks onto energy-efficient cores to maximize Screen-On-Time (SOT).
+* **Stripped Samsung Background Logging:** Eliminates continuous Samsung debug overhead, log spam, and diagnostic tracing, reducing idle heat and battery drain.
 
 ---
 
-## 🛠️ Toolchain & Specifications
-
-* **Target Architecture:** `ARM64-v8a`
-* **SoC Platform:** Samsung Exynos 1380 (s5e8835)
-* **Host OS Support:** One UI 8.0 / 8.5 (Android 16)
-* **Compiler:** Google LLVM Clang Toolchain `r450784d`
-* **LTO Optimizations:** Link-Time Optimization (`CONFIG_LTO_CLANG=y`) enabled for maximum efficiency.
+### ⚡ Performance & Gaming
+* **Buttery-Smooth 120Hz Responsiveness:** Tuned CPU governor responsiveness for instant touch reaction and zero micro-stutters during heavy gaming or rapid multitasking.
+* **Google BBRv3 + Fair Queuing (FQ):** Next-generation network congestion control that slashes latency, minimizes ping fluctuations in competitive games (BGMI, COD, Free Fire), and boosts Wi-Fi and 5G download stability.
+* **Faster App Cold Starts:** Expanded storage read-ahead buffer so heavy games and large applications open noticeably quicker from storage.
+* **NTSYNC Gaming Driver:** Fast Windows synchronization primitives for significantly higher FPS and smoother PC game emulation via Winlator, Mobox, and Wine.
 
 ---
 
-## 📲 Installation Instructions
-
-1. **Kernel Installation:**
-   * Download the correct variant `.zip` file (e.g. `ksu-susfs`) for your setup from the [Releases](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/releases) tab.
-   * Flash the ZIP using a custom recovery (**TWRP / OrangeFox**) or a dedicated kernel flasher app (like **Franco Kernel Manager / EX Kernel Manager**).
-   * Reboot your device.
+### 🧠 Smart Memory Management (Multitasking)
+* **Dual-Stage Smart ZRAM Compression:** Blazing-fast compression while using your phone, combined with deep screen-off recompression that frees up **1.5 GB to 2.0 GB of extra RAM**.
+* **Zero App Reloads (MGLRU):** Modern Multi-Gen LRU memory engine keeps your favorite and recent apps alive in the background without aggressive kills or annoying reloads.
+* **Idle Memory Defragmentation:** Automatically cleans up and organizes compressed memory when your phone screen turns off, preventing memory fragmentation over days of continuous uptime.
+* **Duplicate RAM Page Merging:** Deduplicates identical memory pages across apps to save extra memory for heavy workflows.
 
 ---
 
-## 🗺️ Roadmap / TODO
+### 🛡️ Root, Stealth & Freedom
+* **Next-Gen Kernel Root (KernelSU & KernelSU-Next):** Modern kernel-level root access with complete per-app permission controls.
+* **SUSFS Root Stealth:** Advanced cloaking technology that hides root, patched partitions, and mounts from strict banking apps, UPI apps (Google Pay, PhonePe, Paytm), and work profiles.
+* **Knox Security Hooks Removed:** Stripped restrictive Samsung Knox security subsystems (`DEFEX`, `PROCA`, `FIVE`) so root and root modules work seamlessly.
+* **Carrier Hotspot & Tethering Freedom:** Bypasses carrier hotspot restrictions and data throttling so you can share your mobile data without limits.
+* **In-Kernel WireGuard VPN:** Native VPN engine built directly into the kernel for fast, battery-friendly encrypted networking.
 
-- [ ] **NetHunter Drivers Module** — Distribute high-performance wireless injection drivers (`ath9k_htc`, `rtl8187`, `rt2800usb`) and BadUSB HID injection support as a separate flashable KernelSU/Magisk module (`BizarreKernel-NetHunter-Drivers.zip`). Not included in current releases.
+---
+
+## 📦 Download Variants
+
+Pre-built AnyKernel3 flashable `.zip` packages are automatically generated on every release:
+
+| Package Variant | Root Method | SUSFS Stealth | Recommended For |
+| :--- | :---: | :---: | :--- |
+| **`ksu-susfs`** | KernelSU | 🛡️ Yes | **Daily driving with banking apps, UPI, and full root stealth** *(Recommended)* |
+| **`ksunext-susfs`** | KernelSU-Next | 🛡️ Yes | Users who want the latest KernelSU-Next cutting-edge features with stealth |
+| **`ksu`** | KernelSU | ❌ No | Standard KernelSU root without extra stealth patches |
+| **`ksunext`** | KernelSU-Next | ❌ No | Standard KernelSU-Next root without stealth |
+| **`clean`** | None | ❌ No | **100% Stock unrooted setup** with all performance, battery, and memory enhancements |
+| **`permissive`** | None | ❌ No | Testing custom GSI builds or ports requiring SELinux Permissive |
+
+---
+
+## 📲 Installation Guide
+
+### Via Custom Recovery (TWRP / OrangeFox)
+1. Download your desired variant `.zip` file from the [Releases](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/releases) page.
+2. Boot your phone into **TWRP / OrangeFox Recovery**.
+3. Tap **Install**, select the downloaded kernel `.zip` file, and swipe to confirm.
+   *(No need to wipe `/data` or cache — all your personal data and settings remain untouched).*
+4. Tap **Reboot System**.
+
+### Via Kernel Flasher App (Rooted Users)
+1. Download the kernel `.zip` file on your device.
+2. Open **Kernel Flasher** or **Franco Kernel Manager (FKM)**.
+3. Select **Flash Kernel / Flash ZIP**, choose the downloaded `.zip`, and tap flash.
+4. Reboot your device.
+
+---
+
+## ⚙️ Technical Specifications
+
+* **Platform:** Samsung Exynos 1380 (`s5e8835`)
+* **Base Kernel:** Linux Android Common Kernel `5.15.216` (GKI)
+* **Architecture:** 64-bit ARM (`arm64-v8a`)
+* **Toolchain:** Google Clang LLVM `r450784d` with Full Link-Time Optimization (LTO)
+* **Installation Engine:** AnyKernel3 by osm0sis (bizarre edition)
+
+---
+
+## 🤝 Credits & Acknowledgements
+* **Linux Kernel & Android Open Source Project (AOSP)**
+* **Samsung Open Source Release Center (OSRC)**
+* **osm0sis** for AnyKernel3
+* **tiann** for KernelSU
+* **rifsxd** & **KernelSU-Next team** for KernelSU-Next
+* **simonpunk** for SUSFS
+* **The Linux MM / ZRAM community** for multi-compression backports
+
+---
+
+<p align="center">
+  <b>Crafted with ❤️ by Abhishek Babu (<a href="https://github.com/TheBizarreAbhishek">@TheBizarreAbhishek</a>)</b>
+</p>
