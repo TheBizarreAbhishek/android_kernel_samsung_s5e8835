@@ -339,15 +339,7 @@ jobs:
                   # Add stub implementations for pershoot dev-susfs if needed
                   if [[ -f fs/susfs.c ]] && ! grep -q "susfs_add_sus_type" fs/susfs.c; then
                     echo "🔧 Adding stub implementations for susfs_add_sus_type to fs/susfs.c..."
-                    cat << 'EOF' >> fs/susfs.c
-
-int __attribute__((weak)) susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u16 type, u32 orig_avd_allowed) {
-	return 0;
-}
-int __attribute__((weak)) susfs_add_sus_type(const char *secctx, u32 type_value) {
-	return 0;
-}
-EOF
+                    printf '\nint __attribute__((weak)) susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u16 type, u32 orig_avd_allowed) { return 0; }\nint __attribute__((weak)) susfs_add_sus_type(const char *secctx, u32 type_value) { return 0; }\n' >> fs/susfs.c
                   fi
 
                   # Add SUSFS_VERSION info to kernel/Makefile
