@@ -176,9 +176,9 @@ jobs:
                   cd "$GITHUB_WORKSPACE"
                   if [[ "${{ matrix.kernelsu }}" == "ksunext" ]]; then
                     if [[ "${{ matrix.susfs }}" == "true" ]]; then
-                      echo "🔧 Integrating KernelSU Next (pershoot dev-susfs)..."
-                      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s dev-susfs
-                      echo "✅ KernelSU-Next (pershoot dev-susfs) driver ready"
+                      echo "🔧 Integrating KernelSU Next (pershoot v3.4.2 stable)..."
+                      curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s v3.4.2
+                      echo "✅ KernelSU-Next (pershoot v3.4.2 stable) driver ready"
                     else
                       echo "🔧 Integrating KernelSU Next (official next)..."
                       curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s next
@@ -323,6 +323,11 @@ jobs:
                        sed -i 's/enum rlimit_type/enum ucount_type/g' "$kdp_file" || true
                      fi
                    done
+
+                   # Align KernelSU-Next UAPI version to 5 for compatibility with official Manager v3.4.2
+                   if [[ "${{ matrix.kernelsu }}" == "ksunext" ]]; then
+                     find drivers/kernelsu -name "supercall.h" -exec sed -i 's/KERNEL_SU_UAPI_VERSION = 6/KERNEL_SU_UAPI_VERSION = 5/g' {} + || true
+                   fi
 
                    echo "✅ KSU setup complete"
 
