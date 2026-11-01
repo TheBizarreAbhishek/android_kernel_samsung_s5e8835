@@ -1,9 +1,9 @@
 # 🌀 Bizarre Kernel | Samsung Exynos 1380 (`s5e8835`)
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/TheBizarreAbhishek/android_kernel_samsung_s5e8835/build-kernels.yml?branch=android13-5.15&style=for-the-badge&logo=github)](https://github.com/TheBizarreAbhishek/android_kernel_samsung_s5e8835/actions)
-[![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.216-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
+[![Kernel Version](https://img.shields.io/badge/GKI_Kernel-5.15.220-blue?style=for-the-badge&logo=linux)](https://android.googlesource.com/kernel/common/)
 [![Architecture](https://img.shields.io/badge/Arch-ARM64--v8a-orange?style=for-the-badge&logo=arm)](https://developer.arm.com/)
-[![Android Version](https://img.shields.io/badge/Android-13%20--%2016-green?style=for-the-badge&logo=android)](https://source.android.com/)
+[![Android Version](https://img.shields.io/badge/Android-13%20--%2017-green?style=for-the-badge&logo=android)](https://source.android.com/)
 [![Universal Exynos 1380](https://img.shields.io/badge/SoC-Exynos%201380%20(Universal)-purple?style=for-the-badge)](https://semiconductor.samsung.com/processor/mobile-processor/exynos-1380/)
 
 A clean, high-performance, and battery-optimized custom kernel crafted for **all Samsung Exynos 1380 (`s5e8835`)** smartphones and tablets. Built to deliver cooler temperatures, longer battery life, lag-free 120Hz scrolling, and seamless root stealth for banking apps.
@@ -23,7 +23,7 @@ A clean, high-performance, and battery-optimized custom kernel crafted for **all
 | **Galaxy Tab S9 FE** | `gts9fe` | `SM-X510` (Wi-Fi), `SM-X516B` / `SM-X516C` / `SM-X518U` (5G) |
 | **Galaxy Tab S9 FE+** | `gts9fep` | `SM-X610` (Wi-Fi), `SM-X616B` / `SM-X616C` (5G) |
 
-*Compatible with **One UI 6.x**, **One UI 7.x**, and upcoming Android 15/16 GSI and custom ROMs.*
+*Fully compatible with **One UI 6.x**, **One UI 7.x**, **One UI 8.x**, and **One UI 9.x** (Android 13 through Android 17), including GSIs and custom ROMs.*
 
 ---
 
@@ -98,7 +98,7 @@ Pre-built AnyKernel3 flashable `.zip` packages are automatically generated on ev
 ## ⚙️ Technical Specifications
 
 * **Platform:** Samsung Exynos 1380 (`s5e8835`)
-* **Base Kernel:** Linux Android Common Kernel `5.15.216` (GKI)
+* **Base Kernel:** Linux Android Common Kernel `5.15.220` (GKI)
 * **Architecture:** 64-bit ARM (`arm64-v8a`)
 * **Toolchain:** Google Clang LLVM `r450784d` with Full Link-Time Optimization (LTO)
 * **Installation Engine:** AnyKernel3 by osm0sis (bizarre edition)

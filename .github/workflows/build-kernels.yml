@@ -554,7 +554,7 @@ jobs:
                   prerelease: ${{ github.event.inputs.prerelease == 'true' }}
                   overwrite_files: true
                   body: |
-                      ### Bizarre Kernel for Galaxy A54, A35 & M35 (Exynos 1380 / s5e8835)
+                      ### Bizarre Kernel for all Exynos 1380 devices (s5e8835)
 
                       ### 🚀 Dynamic Features
                       - **KernelSU-Next / KernelSU (tiann stable):** Dynamic build-time integrations.
@@ -567,9 +567,9 @@ jobs:
                       1. **Kernel:** Download and flash the matching variant ZIP (e.g., `bizarrekernel-ksu+susfs-2026-07-07.zip`) using TWRP / OrangeFox or FKM.
 
                       ### 🛠️ Build Specs
-                      - **Kernel Base:** android13-5.15 (LTS ${{ steps.date.outputs.DATE }})
+                      - **Kernel Base:** android13-5.15.220 (GKI)
                       - **Toolchain:** Google Clang r450784d (LTO optimized)
-                      - **Target Platforms:** One UI 8.0 & 8.5 (Android 16)
+                      - **Target Platforms:** One UI 6.x - 9.x (Android 14 - 17)
                       - **Selected Dispatch Variant:** `${{ github.event.inputs.variant || 'all' }}`
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
