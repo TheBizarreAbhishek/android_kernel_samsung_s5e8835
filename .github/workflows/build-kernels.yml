@@ -336,6 +336,20 @@ jobs:
                   patch -p1 --forward < scripts/patches/kernel/0001-susfs-for-samsung-s5e8835.patch \
                     || echo "  ⚠️  Some hunks in SUSFS patch were skipped (expected for partial apply)"
 
+                  # Add stub implementations for pershoot dev-susfs if needed
+                  if [[ -f fs/susfs.c ]] && ! grep -q "susfs_add_sus_type" fs/susfs.c; then
+                    echo "🔧 Adding stub implementations for susfs_add_sus_type to fs/susfs.c..."
+                    cat << 'EOF' >> fs/susfs.c
+
+int __attribute__((weak)) susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u16 type, u32 orig_avd_allowed) {
+	return 0;
+}
+int __attribute__((weak)) susfs_add_sus_type(const char *secctx, u32 type_value) {
+	return 0;
+}
+EOF
+                  fi
+
                   # Add SUSFS_VERSION info to kernel/Makefile
                   if ! grep -q "SUSFS_VERSION" kernel/Makefile 2>/dev/null; then
                     echo "🔧 Adding SUSFS_VERSION to kernel/Makefile..."
@@ -532,8 +546,8 @@ jobs:
         needs: [build]
         runs-on: ubuntu-latest
         if: >-
-            !cancelled()
-            && needs.build.result == 'success'
+            always() && !cancelled() &&
+            (needs.build.result == 'success' || contains(needs.build.result, 'success'))
         steps:
             - name: Set date
               id: date
