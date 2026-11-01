@@ -456,7 +456,8 @@ jobs:
                   echo ""
                   echo "🔨 Compiling kernel & DTBs..."
                   BUILD_START=$(date +%s)
-                  make $MAKE_PARAMS && make $MAKE_PARAMS dtbs
+                  make $MAKE_PARAMS
+                  make $MAKE_PARAMS dtbs
                   BUILD_END=$(date +%s)
                   BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
 
