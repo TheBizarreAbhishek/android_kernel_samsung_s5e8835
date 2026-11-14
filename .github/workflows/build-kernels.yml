@@ -497,10 +497,83 @@ jobs:
                   echo "📦 Packaging into $ZIP_NAME..."
                   cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
 
-                  # Remove module processing from main AnyKernel3 to keep kernel size small (~19MB)
-                  rm -rf "$HOME/AnyKernel3/modules"
+                  # Package updated vendor modules (Mali r54p3 & xHCI USB DAC fix)
+                  mkdir -p "$HOME/AnyKernel3/modules"
+                  find "$GITHUB_WORKSPACE/out" \( -name "mali_kbase*.ko" -o -name "xhci_exynos*.ko" -o -name "dwc3_exynos_usb*.ko" \) -print -exec cp {} "$HOME/AnyKernel3/modules/" \;
+                  "${{ env.TOOLCHAIN_DIR }}/bin/llvm-strip" --strip-debug "$HOME/AnyKernel3/modules/"*.ko 2>/dev/null || true
+
+                  # Disable default AK3 modules handler and inject native KernelSU/Magisk module installer
                   sed -i 's/do.modules=1/do.modules=0/g' "$HOME/AnyKernel3/anykernel.sh"
                   sed -i 's/do.systemless=1/do.systemless=0/g' "$HOME/AnyKernel3/anykernel.sh"
+
+                  {
+                    echo ''
+                    echo '# Systemlessly install updated vendor modules (Mali r54p3 & USB DAC fix) via KernelSU / Magisk'
+                    echo 'if [ -d "/data/adb/modules" ] && [ -d "modules" ]; then'
+                    echo '    ui_print "- Installing updated vendor modules (Mali r54p3 & USB DAC fix)..."'
+                    echo '    MODPATH="/data/adb/modules/bizarre_kernel_modules"'
+                    echo '    mkdir -p "$MODPATH/system/lib/modules"'
+                    echo '    mkdir -p "$MODPATH/system/vendor/lib/modules"'
+                    echo '    mkdir -p "$MODPATH/vendor/lib/modules"'
+                    echo '    mkdir -p "$MODPATH/vendor_dlkm/lib/modules"'
+                    echo '    mkdir -p "$MODPATH/system/vendor_dlkm/lib/modules"'
+                    echo '    cp -f modules/*.ko "$MODPATH/system/lib/modules/" 2>/dev/null || true'
+                    echo '    cp -f modules/*.ko "$MODPATH/system/vendor/lib/modules/" 2>/dev/null || true'
+                    echo '    cp -f modules/*.ko "$MODPATH/vendor/lib/modules/" 2>/dev/null || true'
+                    echo '    cp -f modules/*.ko "$MODPATH/vendor_dlkm/lib/modules/" 2>/dev/null || true'
+                    echo '    cp -f modules/*.ko "$MODPATH/system/vendor_dlkm/lib/modules/" 2>/dev/null || true'
+                    echo '    printf "id=bizarre_kernel_modules\\nname=Bizarre Kernel Modules (Mali r54p3 & xHCI USB DAC Fix)\\nversion=v1.0\\nversionCode=1\\nauthor=Abhishek Babu\\ndescription=Systemlessly overlays updated vendor modules (Mali r54p3 KMD and xHCI DAC crash fix) for Bizarre Kernel.\\n" > "$MODPATH/module.prop"'
+                    echo '    rm -f "$MODPATH/disable" "$MODPATH/remove"'
+                    echo '    ui_print "- Vendor modules installed successfully!"'
+                    echo 'fi'
+                  } >> "$HOME/AnyKernel3/anykernel.sh"
+
+                  # Package standalone KernelSU / Magisk modules zip
+                  KM_DIR="$HOME/bizarre_kernel_modules_pkg"
+                  mkdir -p "$KM_DIR/system/lib/modules"
+                  mkdir -p "$KM_DIR/system/vendor/lib/modules"
+                  mkdir -p "$KM_DIR/vendor/lib/modules"
+                  mkdir -p "$KM_DIR/vendor_dlkm/lib/modules"
+                  mkdir -p "$KM_DIR/system/vendor_dlkm/lib/modules"
+                  mkdir -p "$KM_DIR/META-INF/com/google/android"
+
+                  cp -f "$HOME/AnyKernel3/modules/"*.ko "$KM_DIR/system/lib/modules/" 2>/dev/null || true
+                  cp -f "$HOME/AnyKernel3/modules/"*.ko "$KM_DIR/system/vendor/lib/modules/" 2>/dev/null || true
+                  cp -f "$HOME/AnyKernel3/modules/"*.ko "$KM_DIR/vendor/lib/modules/" 2>/dev/null || true
+                  cp -f "$HOME/AnyKernel3/modules/"*.ko "$KM_DIR/vendor_dlkm/lib/modules/" 2>/dev/null || true
+                  cp -f "$HOME/AnyKernel3/modules/"*.ko "$KM_DIR/system/vendor_dlkm/lib/modules/" 2>/dev/null || true
+
+                  printf '%s\n' \
+                    'id=bizarre_kernel_modules' \
+                    'name=Bizarre Kernel Modules (Mali r54p3 & xHCI USB DAC Fix)' \
+                    'version=v1.0' \
+                    'versionCode=1' \
+                    'author=Abhishek Babu' \
+                    'description=Systemlessly overlays updated vendor modules (Mali r54p3 KMD and xHCI DAC crash fix) for Bizarre Kernel on s5e8835.' \
+                    > "$KM_DIR/module.prop"
+
+                  echo '#MAGISK' > "$KM_DIR/META-INF/com/google/android/updater-script"
+                  {
+                    echo '#!/sbin/sh'
+                    echo 'umask 022'
+                    echo 'ui_print() { echo "$1"; }'
+                    echo 'OUTFD=$2'
+                    echo 'ZIPFILE=$3'
+                    echo 'if [ -f /data/adb/magisk/util_functions.sh ]; then'
+                    echo '  . /data/adb/magisk/util_functions.sh'
+                    echo 'elif [ -f /data/adb/ksu/util_functions.sh ]; then'
+                    echo '  . /data/adb/ksu/util_functions.sh'
+                    echo 'elif [ -f /data/adb/ap/util_functions.sh ]; then'
+                    echo '  . /data/adb/ap/util_functions.sh'
+                    echo 'fi'
+                    echo 'install_module'
+                    echo 'exit 0'
+                  } > "$KM_DIR/META-INF/com/google/android/update-binary"
+                  chmod 0755 "$KM_DIR/META-INF/com/google/android/update-binary"
+
+                  KM_ZIP="Bizarre-Kernel-Modules-${KERNEL_NAME_RAW}-${{ env.DATE }}.zip"
+                  (cd "$KM_DIR" && 7z a -mx=9 "$HOME/AnyKernel3/$KM_ZIP" . -xr'!*.git*' | tail -1)
+                  echo "✅ Standalone Kernel Modules Magisk module packaged: $KM_ZIP"
 
                   cd "$HOME/AnyKernel3"
                   7z a "$ZIP_NAME" . -xr'!*.git*' | tail -1
