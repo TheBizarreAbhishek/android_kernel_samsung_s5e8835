@@ -831,16 +831,22 @@ static int xhci_exynos_probe(struct platform_device *pdev)
 
 	/* Set port_dev quirks for reduce port initialize time */
 	hdev = xhci->main_hcd->self.root_hub;
-	hub = usb_get_intfdata(hdev->actconfig->interface[0]);
-	port_dev = hub->ports[0];
-	port_dev->quirks |= USB_PORT_QUIRK_FAST_ENUM;
+	if (hdev && hdev->actconfig && hdev->actconfig->interface[0]) {
+		hub = usb_get_intfdata(hdev->actconfig->interface[0]);
+		if (hub && hub->ports && hub->ports[0]) {
+			port_dev = hub->ports[0];
+			port_dev->quirks |= USB_PORT_QUIRK_FAST_ENUM;
+		}
+	}
 
 	/* Set port_dev quirks for reduce port initialize time */
 	hdev = xhci->shared_hcd->self.root_hub;
-	hub = usb_get_intfdata(hdev->actconfig->interface[0]);
-	if (hub) {
-		port_dev = hub->ports[0];
-		port_dev->quirks |= USB_PORT_QUIRK_FAST_ENUM;
+	if (hdev && hdev->actconfig && hdev->actconfig->interface[0]) {
+		hub = usb_get_intfdata(hdev->actconfig->interface[0]);
+		if (hub && hub->ports && hub->ports[0]) {
+			port_dev = hub->ports[0];
+			port_dev->quirks |= USB_PORT_QUIRK_FAST_ENUM;
+		}
 	}
 
 	xhci_exynos_pm_state = BUS_RESUME;
