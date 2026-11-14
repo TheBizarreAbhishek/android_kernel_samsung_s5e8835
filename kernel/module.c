@@ -4149,7 +4149,10 @@ static int load_module(struct load_info *info, const char __user *uargs,
 		goto free_copy;
 	}
 
-#if (defined(CONFIG_ZRAM) && !defined(CONFIG_ZRAM_MODULE)) || defined(CONFIG_SEC_PANEL_NOTIFIER_V2)
+#if (defined(CONFIG_ZRAM) && !defined(CONFIG_ZRAM_MODULE)) || defined(CONFIG_SEC_PANEL_NOTIFIER_V2) || \
+    (defined(CONFIG_MALI_MIDGARD) && !defined(CONFIG_MALI_MIDGARD_MODULE)) || \
+    (defined(CONFIG_USB_XHCI_EXYNOS) && !defined(CONFIG_USB_XHCI_EXYNOS_MODULE)) || \
+    (defined(CONFIG_USB_DWC3_EXYNOS_MODULE) && !defined(CONFIG_USB_DWC3_EXYNOS_MODULE_MODULE))
 	/*
 	 * In Samsung GKI, vendor_boot's dlkm.cpio unconditionally modprobes
 	 * vendor modules during early first-stage init. When built into
@@ -4159,7 +4162,12 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	 */
 	if (info->name && (!strcmp(info->name, "zram") ||
 			   !strcmp(info->name, "zsmalloc") ||
-			   !strcmp(info->name, "sec_panel_notifier_v2"))) {
+			   !strcmp(info->name, "sec_panel_notifier_v2") ||
+			   !strcmp(info->name, "mali_kbase") ||
+			   !strcmp(info->name, "xhci_exynos") ||
+			   !strcmp(info->name, "xhci-exynos") ||
+			   !strcmp(info->name, "dwc3_exynos_usb") ||
+			   !strcmp(info->name, "dwc3-exynos-usb"))) {
 		pr_info("Bizarre Kernel: %s is built-in, skipping redundant DLKM load\n", info->name);
 		free_copy(info);
 		return 0;
