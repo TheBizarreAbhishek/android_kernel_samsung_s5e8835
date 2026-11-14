@@ -522,13 +522,15 @@ static int p61_dev_open(struct inode *inode, struct file *filp)
 		P61_DBG_MSG("%s: NFC controller found\n", __func__);
 		p61_dev->nfcc_device = nfc_dev;
 	}
+
+	mutex_lock(&open_close_mutex);
 	filp->private_data = p61_dev;
 	if(p61_dev->ese_spi_transition_state == ESE_SPI_BUSY) {
 		NFC_LOG_ERR("%s : ESE is busy\n", __func__);
+		mutex_unlock(&open_close_mutex);
 		return -EBUSY;
 	}
 
-	mutex_lock(&open_close_mutex);
 	p61_dev->ese_spi_transition_state = ESE_SPI_BUSY;
 
 #if IS_ENABLED(CONFIG_SAMSUNG_NFC)

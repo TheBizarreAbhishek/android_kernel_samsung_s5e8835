@@ -831,7 +831,7 @@ long nfc_dev_compat_ioctl(struct file *pfile, unsigned int cmd,
 {
 	int ret = 0;
 
-	arg = (compat_u64)arg;
+	arg = (unsigned long)compat_ptr(arg);
 	NFC_LOG_DBG("%s: cmd = %x arg = %zx\n", __func__, cmd, arg);
 	ret = nfc_dev_ioctl(pfile, cmd, arg);
 	return ret;

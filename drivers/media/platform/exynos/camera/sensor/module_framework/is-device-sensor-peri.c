@@ -1334,6 +1334,23 @@ void is_sensor_long_term_mode_set_work(struct work_struct *data)
 
 	info("[%s] start\n", __func__);
 
+#ifdef USE_STREAM_OFF_BEFORE_LTE
+	/* Sensor stream off */
+	ret = CALL_CISOPS(cis, cis_stream_off, subdev_cis);
+	if (ret < 0) {
+		err("[%s] stream off fail\n", __func__);
+		return;
+	}
+
+	ret = CALL_CISOPS(cis, cis_wait_streamoff, subdev_cis);
+	if (ret < 0) {
+		err("[%s] stream off fail\n", __func__);
+		return;
+	}
+
+	dbg_sensor(1, "[%s] stream off done\n", __func__);
+#endif
+
 	/* LTE mode setting */
 	ret = CALL_CISOPS(cis, cis_set_long_term_exposure, subdev_cis);
 	if (ret < 0) {
@@ -1366,6 +1383,7 @@ void is_sensor_long_term_mode_set_work(struct work_struct *data)
 		cis->long_term_mode.lemode_set.lemode = 0;
 	}
 
+#ifndef USE_STREAM_OFF_BEFORE_LTE
 	/* Sensor stream off */
 	ret = CALL_CISOPS(cis, cis_stream_off, subdev_cis);
 	if (ret < 0) {
@@ -1380,6 +1398,7 @@ void is_sensor_long_term_mode_set_work(struct work_struct *data)
 	}
 
 	dbg_sensor(1, "[%s] stream off done\n", __func__);
+#endif
 
 	CALL_CISOPS(&sensor_peri->cis, cis_adjust_frame_duration, sensor_peri->subdev_cis,
 			expo.val, &frame_duration);

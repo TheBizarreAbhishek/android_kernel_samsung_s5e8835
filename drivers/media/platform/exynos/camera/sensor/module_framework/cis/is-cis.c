@@ -115,7 +115,7 @@ int sensor_cis_write_registers(struct v4l2_subdev *subdev, const struct sensor_r
 				break;
 			}
 
-			burst_data = vmalloc(burst_num * 2);
+			burst_data = pablo_malloc(burst_num * 2, GFP_KERNEL);
 			start_data = index_str + IXC_NEXT;
 			for (j = 0; j < burst_num; j++) {
 				burst_data[j * 2] = (regset.regs[j * IXC_NEXT + start_data] & 0xFF00) >> 8;
@@ -127,10 +127,10 @@ int sensor_cis_write_registers(struct v4l2_subdev *subdev, const struct sensor_r
 			if (ret < 0) {
 				err("write8_sequential(burst) fail, ret(%d), addr(%#x), data(%#x)",
 						ret, regset.regs[index_str], burst_data[0]);
-				vfree(burst_data);
+				pablo_free(burst_data);
 				goto p_err;
 			}
-			vfree(burst_data);
+			pablo_free(burst_data);
 			burst_num = 1;
 			break;
 
@@ -141,7 +141,7 @@ int sensor_cis_write_registers(struct v4l2_subdev *subdev, const struct sensor_r
 				break;
 			}
 
-			burst_data = vmalloc(burst_num);
+			burst_data = pablo_malloc(burst_num, GFP_KERNEL);
 			start_data = index_str + IXC_NEXT;
 			for (j = 0; j < burst_num; j++) {
 				burst_data[j] = regset.regs[j * IXC_NEXT + start_data];
@@ -152,10 +152,10 @@ int sensor_cis_write_registers(struct v4l2_subdev *subdev, const struct sensor_r
 			if (ret < 0) {
 				err("write8_sequential(burst) fail, ret(%d), addr(%#x), data(%#x)",
 						ret, regset.regs[index_str], burst_data[0]);
-				vfree(burst_data);
+				pablo_free(burst_data);
 				goto p_err;
 			}
-			vfree(burst_data);
+			pablo_free(burst_data);
 			burst_num = 1;
 			break;
 
@@ -2497,7 +2497,7 @@ int sensor_cis_probe(void *client, struct device *client_dev,
 	device = &core->sensor[sensor_dev_id];
 
 	cis = &sp->cis;
-	subdev_cis = kzalloc(sizeof(struct v4l2_subdev), GFP_KERNEL);
+	subdev_cis = pablo_zalloc(sizeof(struct v4l2_subdev), GFP_KERNEL);
 	if (!subdev_cis) {
 		probe_err("subdev_cis is NULL");
 		return -ENOMEM;
@@ -2509,7 +2509,7 @@ int sensor_cis_probe(void *client, struct device *client_dev,
 	cis->ixc_lock = NULL;
 	cis->mipi_clock_index_cur = CAM_MIPI_NOT_INITIALIZED;
 	cis->mipi_clock_index_new = CAM_MIPI_NOT_INITIALIZED;
-	cis->cis_data = kzalloc(sizeof(cis_shared_data), GFP_KERNEL);
+	cis->cis_data = pablo_zalloc(sizeof(cis_shared_data), GFP_KERNEL);
 	if (!cis->cis_data) {
 		err("cis_data is NULL");
 		ret = -ENOMEM;
@@ -2541,7 +2541,7 @@ int sensor_cis_probe(void *client, struct device *client_dev,
 	return 0;
 
 err_alloc_cis_data:
-	kfree(subdev_cis);
+	pablo_free(subdev_cis);
 
 	return ret;
 }

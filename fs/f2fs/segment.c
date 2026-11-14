@@ -385,6 +385,7 @@ out:
 		set_inode_flag(inode, FI_ATOMIC_COMMITTED);
 		if (is_inode_flag_set(inode, FI_ATOMIC_DIRTIED)) {
 			clear_inode_flag(inode, FI_ATOMIC_DIRTIED);
+			f2fs_inode_synced(inode);
 			f2fs_mark_inode_dirty_sync(inode, true);
 		}
 	}
@@ -2669,7 +2670,7 @@ static unsigned int __get_next_segno(struct f2fs_sb_info *sbi, int type)
 		return SIT_I(sbi)->last_victim[ALLOC_NEXT];
 
 	/* find segments from 0 to reuse freed segments */
-	if (F2FS_OPTION(sbi).alloc_mode == ALLOC_MODE_REUSE)
+	if (f2fs_get_alloc_mode(sbi) == ALLOC_MODE_REUSE)
 		return 0;
 
 	return curseg->segno;
@@ -3783,8 +3784,8 @@ void f2fs_do_replace_block(struct f2fs_sb_info *sbi, struct f2fs_summary *sum,
 		}
 	}
 
-	f2fs_bug_on(sbi, !IS_DATASEG(type));
 	curseg = CURSEG_I(sbi, type);
+	f2fs_bug_on(sbi, !IS_DATASEG(curseg->seg_type));
 
 	mutex_lock(&curseg->curseg_mutex);
 	down_write(&sit_i->sentry_lock);

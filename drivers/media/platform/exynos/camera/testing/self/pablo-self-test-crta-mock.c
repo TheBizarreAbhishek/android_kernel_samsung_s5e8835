@@ -28,7 +28,7 @@ void pst_deinit_crta_mock(struct is_hardware *hw)
 {
 	int i;
 
-	vfree(mock_crta_bufmgr);
+	pablo_free(mock_crta_bufmgr);
 	mock_crta_bufmgr = NULL;
 	for (i = 0; i < IS_STREAM_COUNT; i++) {
 		if (saved_crta_bufmgr[i]) {
@@ -37,7 +37,7 @@ void pst_deinit_crta_mock(struct is_hardware *hw)
 		}
 	}
 
-	vfree(hw->icpu_adt);
+	pablo_free(hw->icpu_adt);
 	hw->icpu_adt = NULL;
 	if (saved_icpu_adt) {
 		hw->icpu_adt = saved_icpu_adt;
@@ -53,7 +53,7 @@ int pst_init_crta_mock(struct is_hardware *hw)
 	if (hw->icpu_adt)
 		saved_icpu_adt = hw->icpu_adt;
 
-	hw->icpu_adt = vmalloc(sizeof(struct pablo_icpu_adt));
+	hw->icpu_adt = pablo_malloc(sizeof(struct pablo_icpu_adt), GFP_KERNEL);
 	if (!hw->icpu_adt) {
 		pr_err("failed to allocate icpu_adt");
 		return -ENOMEM;
@@ -62,7 +62,7 @@ int pst_init_crta_mock(struct is_hardware *hw)
 	hw->icpu_adt->msg_ops = &pst_icpu_adt_msg_ops_mock;
 
 	/* crta_bufmgr mock */
-	mock_crta_bufmgr = vmalloc(sizeof(struct pablo_crta_bufmgr));
+	mock_crta_bufmgr = pablo_malloc(sizeof(struct pablo_crta_bufmgr), GFP_KERNEL);
 	if (!mock_crta_bufmgr) {
 		pr_err("failed to allocate mock_crta_bufmgr");
 		ret = -ENOMEM;

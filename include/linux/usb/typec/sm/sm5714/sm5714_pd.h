@@ -1018,6 +1018,7 @@ struct sm5714_usbpd_data {
 	int			d2d_type;
 #ifndef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION	
 	bool		altmode_enable;
+	bool		altmode_restarted;
 #endif
 #if IS_ENABLED(CONFIG_BATTERY_SAMSUNG)
 	struct pdic_notifier_struct pd_noti;

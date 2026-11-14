@@ -168,7 +168,7 @@ static int npu_vertex_s_graph(struct file *file, struct vs4l_graph *sinfo)
 		return -ERESTARTSYS;
 	}
 
-	if (!(vctx->state & BIT(NPU_VERTEX_OPEN))) {
+	if (!(vctx->state & BIT(NPU_VERTEX_POWER))) {
 		npu_ierr("invalid state(%X)\n", vctx, vctx->state);
 		ret = -EINVAL;
 		goto p_err;
@@ -962,6 +962,11 @@ static int __npu_vertex_bootup(struct file *file, struct vs4l_ctrl *ctrl)
 		return -EINVAL;
 	}
 #endif
+	if (ctrl->value != NPU_HWDEV_ID_NPU && ctrl->value != NPU_HWDEV_ID_DSP) {
+		npu_ierr("invalid hw device id\n", vctx);
+		return -EINVAL;
+	}
+
 	session->hids = ctrl->value;
 	/* check npu_device emergency error */
 	ret = check_emergency_vctx(vctx);
@@ -1004,6 +1009,13 @@ static int __npu_vertex_bootup(struct file *file, struct vs4l_ctrl *ctrl)
 	{
 		struct npu_hw_device *hdev =
 				npu_get_hdev_by_id(session->hids);
+		if (!hdev) {
+			npu_err("fail in npu_get_hdev_by_id, no hw device\n");
+			__vref_put(&vertex->boot_cnt);
+			ret = -EINVAL;
+			goto p_err;
+		}
+
 		if (atomic_read(&hdev->boot_cnt.refcount) == 1) {
 			ret = npu_stm_enable(&device->system, session->hids);
 			if (ret)
@@ -1075,6 +1087,16 @@ static int npu_vertex_profileoff(struct file *file, struct vs4l_profiler *phead)
 		npu_ierr("fail in mutex_lock_interruptible\n", vctx);
 		return -ERESTARTSYS;
 	}
+
+ 	if (unlikely(!profiler)) {
+		npu_err("profiler is NULL pointer\n");
+		return -EINVAL;
+	}
+
+	if (unlikely(!profiler[PROFILE_QBUF].node)) {
+		npu_err("profiler.node is NULL pointer\n");
+                return -EINVAL;
+        }
 
 	if (phead->node) {
 		(*phead->node).duration =	profiler[PROFILE_QBUF].node[0].duration;

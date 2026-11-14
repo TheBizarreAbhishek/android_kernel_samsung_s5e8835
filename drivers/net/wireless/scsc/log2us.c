@@ -723,9 +723,14 @@ void slsi_conn_log2us_roam_result(struct slsi_dev *sdev, struct net_device *dev,
 		res = "ROAM";
 	else
 		res = "NO_ROAM";
-	pos += scnprintf(log_buffer + pos, buf_size - pos, "[%d.%d] [ROAM] RESULT %s bssid="
-			 MACSTR_NOMASK " [fw_time=%llu status=%d]",
-			 time[0], time[1], res, MAC2STR_LOG(bssid), timestamp, !roam_candidate);
+
+	pos += scnprintf(log_buffer + pos, buf_size - pos, "[%d.%d][ROAM] RESULT %s",
+			 time[0], time[1], res);
+	if (roam_candidate && bssid)
+		pos += scnprintf(log_buffer + pos, buf_size - pos, " bssid=" MACSTR_NOMASK,
+				 MAC2STR_LOG(bssid));
+	pos += scnprintf(log_buffer + pos, buf_size - pos, " [fw_time=%llu status=%d]",
+			 timestamp, !roam_candidate);
 	new_node->len = pos + 1;
 	enqueue_log_buffer(new_node, &sdev->conn_log2us_ctx);
 	queue_work(sdev->conn_log2us_ctx.log2us_workq, &sdev->conn_log2us_ctx.log2us_work);

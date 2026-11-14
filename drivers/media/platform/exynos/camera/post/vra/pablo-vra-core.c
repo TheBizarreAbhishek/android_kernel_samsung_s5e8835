@@ -1046,7 +1046,7 @@ static int vra_open(struct file *file)
 	int ret = 0;
 
 	vra_info("[VRA]\n");
-	ctx = vmalloc(sizeof(struct vra_ctx));
+	ctx = pablo_malloc(sizeof(struct vra_ctx), GFP_KERNEL);
 
 	if (!ctx) {
 		dev_err(vra->dev, "no memory for open context\n");
@@ -1092,7 +1092,7 @@ err_aclk_prepare:
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
 	atomic_dec(&vra->m2m.in_use);
-	vfree(ctx);
+	pablo_free(ctx);
 
 	return ret;
 }
@@ -1124,7 +1124,7 @@ static int vra_release(struct file *file)
 		clk_unprepare(vra->aclk);
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
-	vfree(ctx);
+	pablo_free(ctx);
 
 	return 0;
 }

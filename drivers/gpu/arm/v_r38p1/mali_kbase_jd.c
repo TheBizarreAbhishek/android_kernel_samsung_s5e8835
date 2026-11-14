@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2010-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2026 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -28,6 +28,13 @@
 #include <linux/version.h>
 #include <linux/ratelimit.h>
 #include <linux/priority_control_manager.h>
+#include <linux/sched/signal.h>
+
+#include <linux/kthread.h>
+#if KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE
+#include <uapi/linux/sched/types.h>
+#endif
+#include <linux/sched.h>
 
 #include <mali_kbase_jm.h>
 #include <mali_kbase_kinstr_jm.h>
@@ -40,6 +47,12 @@
 
 #include <mali_kbase_caps.h>
 #include <mali_exynos_kbase_entrypoint.h>
+
+/* Set job_done_worker kthread's FIFO priority: 1-99. Can use 0 to run with normal kthread */
+#define JOB_DONE_KTHREAD_SCHED_PRIORITY 1
+
+/* Set job_done_worker kthread's nice value, with SCHED_NORMAL cases */
+#define JOB_DONE_KTHREAD_CFG_NICE_VAL (-20)
 
 #if IS_ENABLED(CONFIG_SEC_ABC)
 #include <linux/sti/abc_common.h>
@@ -1413,7 +1426,7 @@ while (false)
 
 KBASE_EXPORT_TEST_API(kbase_jd_submit);
 
-void kbase_jd_done_worker(struct work_struct *data)
+void kbase_jd_done_worker(struct kthread_work *data)
 {
 	struct kbase_jd_atom *katom = container_of(data, struct kbase_jd_atom, work);
 	struct kbase_jd_context *jctx;
@@ -1611,7 +1624,7 @@ void kbase_jd_done_worker(struct work_struct *data)
  * running (by virtue of only being called on contexts that aren't
  * scheduled).
  */
-static void jd_cancel_worker(struct work_struct *data)
+static void jd_cancel_worker(struct kthread_work *data)
 {
 	struct kbase_jd_atom *katom = container_of(data, struct kbase_jd_atom, work);
 	struct kbase_jd_context *jctx;
@@ -1709,9 +1722,8 @@ void kbase_jd_done(struct kbase_jd_atom *katom, int slot_nr,
 		return;
 #endif
 
-	WARN_ON(work_pending(&katom->work));
-	INIT_WORK(&katom->work, kbase_jd_done_worker);
-	queue_work(kctx->jctx.job_done_wq, &katom->work);
+	kthread_init_work(&katom->work, kbase_jd_done_worker);
+	kthread_queue_work(kctx->jctx.job_done_worker, &katom->work);
 }
 
 KBASE_EXPORT_TEST_API(kbase_jd_done);
@@ -1731,12 +1743,10 @@ void kbase_jd_cancel(struct kbase_device *kbdev, struct kbase_jd_atom *katom)
 	/* This should only be done from a context that is not scheduled */
 	KBASE_DEBUG_ASSERT(!kbase_ctx_flag(kctx, KCTX_SCHEDULED));
 
-	WARN_ON(work_pending(&katom->work));
-
 	katom->event_code = BASE_JD_EVENT_JOB_CANCELLED;
 
-	INIT_WORK(&katom->work, jd_cancel_worker);
-	queue_work(kctx->jctx.job_done_wq, &katom->work);
+	kthread_init_work(&katom->work, jd_cancel_worker);
+	kthread_queue_work(kctx->jctx.job_done_worker, &katom->work);
 }
 
 
@@ -1790,22 +1800,89 @@ void kbase_jd_zap_context(struct kbase_context *kctx)
 
 KBASE_EXPORT_TEST_API(kbase_jd_zap_context);
 
+static void kbase_cfg_kthread_user_nice(struct kbase_context *kctx)
+{
+	set_user_nice(kctx->jctx.job_done_worker->task,
+		JOB_DONE_KTHREAD_CFG_NICE_VAL);
+	dev_dbg(kctx->kbdev->dev,
+		"mali_jd/%u: set_user_nice to: %d, kctx: %pK",
+		kctx->id,
+		JOB_DONE_KTHREAD_CFG_NICE_VAL,
+		(void *)kctx);
+}
+
+#if (JOB_DONE_KTHREAD_SCHED_PRIORITY > 0)
+static void kbase_cfg_jd_done_kthread(struct kbase_context *kctx)
+{
+	int mali_err = 0;
+	const char *sched_api = NULL;
+
+#if KERNEL_VERSION(5, 14, 0) <= LINUX_VERSION_CODE
+	struct sched_attr attr = {
+		.sched_policy = SCHED_FIFO,
+		.sched_priority = JOB_DONE_KTHREAD_SCHED_PRIORITY,
+	};
+#elif KERNEL_VERSION(5, 9, 0) > LINUX_VERSION_CODE
+	struct sched_param param = {
+		.sched_priority = JOB_DONE_KTHREAD_SCHED_PRIORITY,
+	};
+#endif
+
+#if KERNEL_VERSION(5, 14, 0) <= LINUX_VERSION_CODE
+	sched_api = "sched_setattr_nocheck";
+	mali_err = sched_setattr_nocheck(kctx->jctx.job_done_worker->task,
+					&attr);
+#elif KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE
+	/*
+	* sched_setscheduler() is no longer exported for modules here.
+	* sched_set_fifo() and sched_set_fifo_low() are exported (fixed RT priority).
+	*/
+	if (JOB_DONE_KTHREAD_SCHED_PRIORITY > 1) {
+		sched_api = "sched_set_fifo";
+		sched_set_fifo(kctx->jctx.job_done_worker->task);
+	} else {
+		sched_api = "sched_set_fifo_low";
+		sched_set_fifo_low(kctx->jctx.job_done_worker->task);
+	}
+#else /* KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE */
+	sched_api = "sched_setscheduler_nocheck";
+	mali_err = sched_setscheduler_nocheck(kctx->jctx.job_done_worker->task,
+					SCHED_FIFO, &param);
+#endif /* KERNEL_VERSION(5, 9, 0) <= LINUX_VERSION_CODE */
+
+	/* If failed above, signal the use on nice value for a fallback */
+	if (mali_err) {
+		dev_dbg(kctx->kbdev->dev,
+		"Can't set 'mali_jd/%u' to SCHED_FIFO via %s (err: %d), "
+		"fallback to nice %d, kctx: %pK",
+		kctx->id,
+		sched_api ? sched_api : "unknown",
+		mali_err,
+		JOB_DONE_KTHREAD_CFG_NICE_VAL,
+		(void *)kctx);
+		kbase_cfg_kthread_user_nice(kctx);
+	}
+}
+#endif /* JOB_DONE_KTHREAD_SCHED_PRIORITY > 0 */
+
 int kbase_jd_init(struct kbase_context *kctx)
 {
 	int i;
-	int mali_err = 0;
 	struct priority_control_manager_device *pcm_device = NULL;
 
 	KBASE_DEBUG_ASSERT(kctx);
 	pcm_device = kctx->kbdev->pcm_dev;
 	kctx->jctx.max_priority = KBASE_JS_ATOM_SCHED_PRIO_REALTIME;
 
-	kctx->jctx.job_done_wq = alloc_workqueue("mali_jd",
-			WQ_HIGHPRI | WQ_UNBOUND, 1);
-	if (kctx->jctx.job_done_wq == NULL) {
-		mali_err = -ENOMEM;
-		goto out1;
-	}
+	kctx->jctx.job_done_worker = kthread_create_worker(0, "mali_jd/%u", kctx->id);
+	if (IS_ERR_OR_NULL(kctx->jctx.job_done_worker))
+		return -ENOMEM;
+
+#if (JOB_DONE_KTHREAD_SCHED_PRIORITY > 0)
+	kbase_cfg_jd_done_kthread(kctx);
+#else
+	kbase_cfg_kthread_user_nice(kctx);
+#endif
 
 	for (i = 0; i < BASE_JD_ATOM_COUNT; i++) {
 		init_waitqueue_head(&kctx->jctx.atoms[i].completed);
@@ -1829,9 +1906,7 @@ int kbase_jd_init(struct kbase_context *kctx)
 		kctx->jctx.renderpasses[i].state = KBASE_JD_RP_COMPLETE;
 
 	mutex_init(&kctx->jctx.lock);
-
 	init_waitqueue_head(&kctx->jctx.zero_jobs_wait);
-
 	spin_lock_init(&kctx->jctx.tb_lock);
 
 	kctx->jctx.job_nr = 0;
@@ -1844,9 +1919,6 @@ int kbase_jd_init(struct kbase_context *kctx)
 				pcm_device, current, KBASE_JS_ATOM_SCHED_PRIO_REALTIME);
 
 	return 0;
-
- out1:
-	return mali_err;
 }
 
 KBASE_EXPORT_TEST_API(kbase_jd_init);
@@ -1855,8 +1927,11 @@ void kbase_jd_exit(struct kbase_context *kctx)
 {
 	KBASE_DEBUG_ASSERT(kctx);
 
+	if (IS_ERR_OR_NULL(kctx->jctx.job_done_worker))
+		return;
+
 	/* Work queue is emptied by this */
-	destroy_workqueue(kctx->jctx.job_done_wq);
+	kthread_destroy_worker(kctx->jctx.job_done_worker);
 }
 
 KBASE_EXPORT_TEST_API(kbase_jd_exit);

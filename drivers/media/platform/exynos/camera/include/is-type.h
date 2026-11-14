@@ -113,7 +113,10 @@ struct size_cr_set {
 #define CONVRES(src, src_max, tar_max) \
 	((src <= 0) ? (0) : ((src * tar_max + (src_max >> 1)) / src_max))
 
+#ifndef MIN
 #define MIN(a, b)	(((a) < (b)) ? (a) : (b))
+#endif
+#ifndef MAX
 #define MAX(a, b)	(((a) > (b)) ? (a) : (b))
-
+#endif
 #endif

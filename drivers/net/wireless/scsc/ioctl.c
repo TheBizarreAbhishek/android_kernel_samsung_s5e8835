@@ -234,6 +234,7 @@
 #define CMD_GET_TDLS_NUM_OF_SESSION "GET_TDLS_NUM_OF_SESSION"
 
 #define CMD_GET_TAS_MODE "GET_TAS_MODE"
+#define CMD_GET_STA_DUMP "GET_STA_DUMP"
 
 #define ROAMOFFLAPLIST_MIN 1
 #define ROAMOFFLAPLIST_MAX 100
@@ -5271,7 +5272,107 @@ void slsi_disable_ch12_13(struct slsi_dev *sdev)
 		chan->flags |= IEEE80211_CHAN_DISABLED;
 	}
 
-	SLSI_DBG1(sdev, SLSI_CFG80211, "Channels 12 and 13 have been disabled");
+	SLSI_DBG1(sdev, SLSI_CFG80211, "Channels 12 and 13 have been disabled\n");
+}
+
+static void slsi_p2p_group_disconnect(struct slsi_dev *sdev, struct net_device *p2p_dev)
+{
+	struct netdev_vif *p2p_ndev_vif = NULL;
+
+	if (p2p_dev)
+		p2p_ndev_vif = netdev_priv(p2p_dev);
+	else
+		return;
+
+	if (!p2p_ndev_vif)
+		return;
+
+	SLSI_DBG1(sdev, SLSI_CFG80211, "\n");
+
+	SLSI_MUTEX_LOCK(p2p_ndev_vif->vif_mutex);
+	if (SLSI_IS_P2P_GROUP_STATE(sdev) && p2p_ndev_vif && p2p_ndev_vif->activated && p2p_ndev_vif->chan->hw_value >= 36 && p2p_ndev_vif->chan->hw_value <= 64) {
+
+		SLSI_DBG1(sdev, SLSI_CFG80211, "P2P Disconnect p2p state: %d chan: %d\n", sdev->p2p_state, p2p_ndev_vif->chan->hw_value);
+
+		if (sdev->p2p_state == P2P_GROUP_FORMED_GO)
+			slsi_clear_cached_ies(&p2p_ndev_vif->ap.add_info_ies, &p2p_ndev_vif->ap.add_info_ies_len);
+		slsi_vif_cleanup(sdev, p2p_dev, 1, 0);
+	}
+	SLSI_MUTEX_UNLOCK(p2p_ndev_vif->vif_mutex);
+}
+
+void slsi_enable_disable_unii_1_2a(struct net_device *dev, bool enable)
+{
+	struct netdev_vif           *ndev_vif = netdev_priv(dev);
+	struct slsi_dev             *sdev = ndev_vif->sdev;
+	struct wiphy                *wiphy = sdev->wiphy;
+	struct ieee80211_channel    *chan;
+	int r;
+	struct net_device *p2p_dev;
+
+	p2p_dev = slsi_get_netdev(sdev, SLSI_NET_INDEX_P2PX_SWLAN);
+	SLSI_MUTEX_LOCK(ndev_vif->vif_mutex);
+
+	/* For country CA, on airplanemode on, disable UNII-1/2A as required by canada ISED */
+	/* index 0-3 is unii1 index 4-7 is unii2a */
+	if (wiphy->bands[1]) {
+		if (enable) {
+			chan = &wiphy->bands[1]->channels[0];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[1];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[2];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[3];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[4];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[5];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[6];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[7];
+			chan->flags &= ~IEEE80211_CHAN_DISABLED;
+		} else {
+			chan = &wiphy->bands[1]->channels[0];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[1];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[2];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[3];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[4];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[5];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[6];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+			chan = &wiphy->bands[1]->channels[7];
+			chan->flags |= IEEE80211_CHAN_DISABLED;
+
+			SLSI_DBG1(sdev, SLSI_CFG80211, "unii1 and unii2a have been disabled\n");
+
+			if (ndev_vif->sta.vif_status == SLSI_VIF_STATUS_CONNECTED &&
+				(ndev_vif->chan->hw_value >= 36 && ndev_vif->chan->hw_value <= 64)) {
+
+				SLSI_INFO(sdev, "Disconnect STA due to UNII-1/2a disable\n");
+				r = slsi_mlme_disconnect(sdev, dev, ndev_vif->sta.sta_bss->bssid, WLAN_REASON_DEAUTH_LEAVING, true);
+				if (r != 0)
+					SLSI_ERR(sdev, "slsi_mlme_disconnect(" MACSTR ") failed with %d\n",
+						MAC2STR(ndev_vif->sta.sta_bss->bssid), r);
+				r = slsi_handle_disconnect(sdev, dev, ndev_vif->sta.sta_bss->bssid, 0, NULL, 0);
+				if (r != 0)
+					SLSI_ERR(sdev, "slsi_handle_disconnect(" MACSTR ") failed with %d\n",
+						MAC2STR(ndev_vif->sta.sta_bss->bssid), r);
+			}
+			SLSI_MUTEX_UNLOCK(ndev_vif->vif_mutex);
+			slsi_p2p_group_disconnect(sdev, p2p_dev);
+			return;
+		}
+	}
+
+	SLSI_MUTEX_UNLOCK(ndev_vif->vif_mutex);
 }
 
 int slsi_set_fcc_channel(struct net_device *dev, char *cmd, int cmd_len)
@@ -5282,6 +5383,7 @@ int slsi_set_fcc_channel(struct net_device *dev, char *cmd, int cmd_len)
 	int                    status;
 	int                    fcc_channel_value;
 	u16                    host_state;
+	char country_code[3] = "";
 
 	ioctl_args = slsi_get_private_command_args(cmd, cmd_len, 1);
 	status = slsi_verify_ioctl_args(sdev, ioctl_args);
@@ -5294,7 +5396,7 @@ int slsi_set_fcc_channel(struct net_device *dev, char *cmd, int cmd_len)
 		return -EINVAL;
 	}
 
-	if (fcc_channel_value != 0 && fcc_channel_value != -1) {
+	if (!(fcc_channel_value >= -1 && fcc_channel_value <= 3)) {
 		SLSI_ERR(sdev, "Invalid value of flight_mode_ena: '%s'\n", ioctl_args->args[0]);
 		kfree(ioctl_args);
 		return -EINVAL;
@@ -5303,22 +5405,41 @@ int slsi_set_fcc_channel(struct net_device *dev, char *cmd, int cmd_len)
 	SLSI_MUTEX_LOCK(sdev->device_config_mutex);
 	host_state = sdev->device_config.host_state;
 
-	/* SET_FCC_CHANNEL 0 indicates flight mode is enabled */
-	/* SET_FCC_CHANNEL -1 indicates flight mode is disabled */
-	if (fcc_channel_value == 0)
+	/* SET_FCC_CHANNEL 0/1/3 indicates celluar active is disabled */
+	/* SET_FCC_CHANNEL -1 indicates celluar active is enabled */
+	if (fcc_channel_value == 0 || fcc_channel_value == 1 || fcc_channel_value == 3)
 		host_state = host_state & ~SLSI_HOSTSTATE_CELLULAR_ACTIVE;
-	else
+	else if (fcc_channel_value == -1)
 		host_state = host_state | SLSI_HOSTSTATE_CELLULAR_ACTIVE;
+	/* SET_FCC_CHANNEL -1/0/1 indicates airplane active is disabled */
+	/* SET_FCC_CHANNEL 3 indicates airplane active is enabled */
+	if (fcc_channel_value == -1 || fcc_channel_value == 0 || fcc_channel_value == 1)
+		host_state = host_state & ~SLSI_HOSTSTATE_AIRPLANE_ACTIVE;
+	else if (fcc_channel_value == 3)
+		host_state = host_state | SLSI_HOSTSTATE_AIRPLANE_ACTIVE;
 	sdev->device_config.host_state = host_state;
 
 	status = slsi_mlme_set_host_state(sdev, dev, host_state);
 	if (status) {
 		SLSI_ERR(sdev, "Err setting MMaxPowerEna. error = %d\n", status);
-	} else {
-		if (fcc_channel_value == 0 && sdev->device_config.disable_ch12_ch13)
-			slsi_disable_ch12_13(sdev);
 	}
+
+	if ((fcc_channel_value == 0 || fcc_channel_value == 1 || fcc_channel_value == 3) && sdev->device_config.disable_ch12_ch13)
+			slsi_disable_ch12_13(sdev);
+
+	country_code[0] = sdev->device_config.domain_info.regdomain->alpha2[0];
+	country_code[1] = sdev->device_config.domain_info.regdomain->alpha2[1];
+	country_code[2] = '\0';
+
 	SLSI_MUTEX_UNLOCK(sdev->device_config_mutex);
+
+	if (country_code[0] == 'C' && country_code[1] == 'A') {
+		if (fcc_channel_value == -1 || fcc_channel_value == 0 || fcc_channel_value == 1) {
+			slsi_enable_disable_unii_1_2a(dev, true);
+		} else if (fcc_channel_value == 3) {
+			slsi_enable_disable_unii_1_2a(dev, false);
+		}
+	}
 
 	kfree(ioctl_args);
 	return status;
@@ -5624,10 +5745,9 @@ static int slsi_get_bss_info(struct net_device *dev, char *command, int buf_len)
 
 	SLSI_MUTEX_LOCK(ndev_vif->vif_mutex);
 
-	len = snprintf(command, buf_len, "%02x:%02x:%02x %.*s %u %u %d %u %u %u %u %u %d %d %u %u %u %u",
+	len = snprintf(command, buf_len, "%02x:%02x:%02x %u %u %d %u %u %u %u %u %d %d %u %u %u %u",
 		       ndev_vif->sta.last_connected_bss.address[0],  ndev_vif->sta.last_connected_bss.address[1],
 		       ndev_vif->sta.last_connected_bss.address[2],
-		       (int)ndev_vif->sta.last_connected_bss.ssid_len, ndev_vif->sta.last_connected_bss.ssid,
 		       ndev_vif->sta.last_connected_bss.channel_freq, ndev_vif->sta.last_connected_bss.bandwidth,
 		       ndev_vif->sta.last_connected_bss.rssi, ndev_vif->sta.last_connected_bss.tx_data_rate,
 		       ndev_vif->sta.last_connected_bss.mode, ndev_vif->sta.last_connected_bss.antenna_mode,
@@ -7893,6 +8013,61 @@ static int slsi_get_tas_mode(struct net_device *dev, char *command, int buf_len)
 	return len;
 }
 
+static void slsi_get_sta_dump_str(struct slsi_sta_dump_data *dump_param, char *sta_dump) {
+	char sta_str[17][15] = {"rssi:", "ant1rssi:","ant2rssi:","rxpackets:", "txpackets:",
+				"rxbytes:", "txbytes:", "rxbitrate:", "txbitrate:", "rxmcs:",
+				"txmcs:", "rxbandwidth:", "txbandwidth:", "rxnss:", "txnss:",
+				"mode:"};
+	char mode[7][7] = {"11b ", "11g ", "11n ", "11a ", "11ac ", "11ax ", "11be "};
+	char unit[17][6] = {"dBm ", "dBm ", "dBm ", " ", " ", " ", " ", "Mbps ", "Mbps ", " ", " ",
+			    "MHz ", "MHz ", " ", " ", " "};
+	char int_string[30] = "";
+	char bw[4][15] = {"20", "40", "80", "160"};
+	u8 i;
+
+	for(i = 0; i < SLSI_STA_DUMP_MAX ; i++) {
+		if (!(dump_param->param_field & BIT(i)))
+			continue;
+		if (i != SLSI_STA_DUMP_MODE && i != SLSI_STA_DUMP_RXBANDWIDTH &&
+			i != SLSI_STA_DUMP_TXBANDWIDTH) {
+			sta_dump = strcat(sta_dump, sta_str[i]);
+			sprintf(int_string, "%d", dump_param->data[i]);
+			sta_dump = strcat(sta_dump, int_string);
+		} else if (i == SLSI_STA_DUMP_MODE) {
+			sta_dump = strcat(sta_dump, sta_str[i]);
+			sta_dump = strcat(sta_dump, mode[dump_param->data[i]]);
+		} else {
+			sta_dump = strcat(sta_dump, sta_str[i]);
+			sta_dump = strcat(sta_dump, bw[dump_param->data[i]]);
+		}
+		sta_dump = strcat(sta_dump, unit[i]);
+	}
+}
+
+static int slsi_get_sta_dump(struct net_device *dev, char *command, int buf_len)
+{
+	struct netdev_vif *ndev_vif = netdev_priv(dev);
+	int res = 0;
+	struct slsi_sta_dump_data dump_params = {0};
+	char sta_dump[256] = {" "};
+
+	SLSI_MUTEX_LOCK(ndev_vif->vif_mutex);
+	if (ndev_vif->vif_type != FAPI_VIFTYPE_STATION &&
+	    ndev_vif->sta.vif_status != SLSI_VIF_STATUS_CONNECTED) {
+		SLSI_NET_ERR(dev, "type %d in %d state\n", ndev_vif->vif_type,
+			     ndev_vif->sta.vif_status);
+		SLSI_MUTEX_UNLOCK(ndev_vif->vif_mutex);
+		goto print_res;
+	}
+	slsi_mlme_get_sta_dump(ndev_vif, dev, &dump_params);
+	SLSI_MUTEX_UNLOCK(ndev_vif->vif_mutex);
+	slsi_get_sta_dump_str(&dump_params, sta_dump);
+print_res:
+	res = snprintf(command, buf_len, "%s", sta_dump);
+
+	return res;
+}
+
 static const struct slsi_ioctl_fn slsi_ioctl_fn_table[] = {
 	{ CMD_SETSUSPENDMODE,               slsi_set_suspend_mode },
 	{ CMD_SETJOINPREFER,                slsi_update_rssi_boost },
@@ -8081,6 +8256,7 @@ static const struct slsi_ioctl_fn slsi_ioctl_fn_table[] = {
 	{CMD_GET_TDLS_MAX_SESSION,          slsi_get_tdls_max_session},
 	{CMD_GET_TDLS_NUM_OF_SESSION,       slsi_get_tdls_num_of_session},
 	{CMD_GET_TAS_MODE,                  slsi_get_tas_mode},
+	{CMD_GET_STA_DUMP,                  slsi_get_sta_dump}
 };
 
 static int slsi_ioctl_fn_lookup(char *command, int len)

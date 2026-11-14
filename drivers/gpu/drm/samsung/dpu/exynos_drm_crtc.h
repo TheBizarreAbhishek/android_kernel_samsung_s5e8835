@@ -210,7 +210,6 @@ struct exynos_drm_crtc_state {
 	unsigned int reserved_win_mask;
 	unsigned int visible_win_mask;
 	unsigned int freed_win_mask;
-	bool win_inserted;
 	int64_t dqe_fd;
 	s32 __user *bts_fps_ptr;
 	u32 boost_bts_fps;
@@ -254,6 +253,7 @@ struct exynos_drm_crtc {
 	struct dpu_freq_hop_ops *freq_hop;
 	struct rcd_device		*rcd;
 	enum exynos_drm_crc_state crc_state;
+	struct drm_pending_vblank_event *event;
 };
 
 int exynos_drm_crtc_create_properties(struct drm_device *drm_dev);
@@ -280,7 +280,8 @@ uint32_t crtc_get_bts_fps(const struct drm_crtc *crtc);
  */
 void exynos_drm_crtc_te_handler(struct drm_crtc *crtc);
 
-void exynos_crtc_handle_event(struct exynos_drm_crtc *exynos_crtc);
+void exynos_crtc_arm_event(struct exynos_drm_crtc *exynos_crtc);
+void exynos_crtc_send_event(struct exynos_drm_crtc *exynos_crtc);
 
 static inline struct drm_encoder*
 crtc_get_encoder(const struct drm_crtc_state *crtc_state, u32 encoder_type)

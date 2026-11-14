@@ -49,8 +49,9 @@ extern struct s610_radio *gradio;
 #define RDS_BLK_TYPE_MASK	0xE0
 #define RDS_BLK_TYPE_SHIFT	5
 #define RDS_ERR_CNT_MASK	0x1F
+#ifndef MIN
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
-
+#endif
 #define BUF_LEN 32
 #define BLK_LEN 26
 

@@ -156,6 +156,11 @@ retry:
 	return 0;
 }
 
+bool ipc_check_rx_event_full(void) {
+	return false;
+}
+EXPORT_SYMBOL(ipc_check_rx_event_full);
+
 void ipc_reset_map(void)
 {
 	struct ipc_info *ipc = ipc_get_info();

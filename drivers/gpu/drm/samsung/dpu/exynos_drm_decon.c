@@ -1029,7 +1029,7 @@ static void decon_atomic_flush(struct exynos_drm_crtc *exynos_crtc,
 			dsim_wait_pending_vblank(dsim);
 		}
 
-		exynos_crtc_handle_event(exynos_crtc);
+		exynos_crtc_arm_event(exynos_crtc);
 	}
 
 	if (exynos_crtc->migov)

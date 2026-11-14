@@ -3531,7 +3531,8 @@ int slsi_populate_bss_record(struct net_device *dev)
 		SLSI_CHECK_TYPE(sdev, values[7].type, SLSI_MIB_TYPE_UINT);
 		fw_tx_rate = values[7].u.uintValue;
 		slsi_decode_fw_rate(fw_tx_rate, NULL,
-				    (unsigned long *)(&ndev_vif->sta.last_connected_bss.tx_data_rate));
+				   ( unsigned long *)(&ndev_vif->sta.last_connected_bss.tx_data_rate),
+				    NULL, NULL, NULL);
 	}
 
 	if (values[8].type != SLSI_MIB_TYPE_NONE) {    /* ROAMING_AKM */
@@ -3883,7 +3884,8 @@ int slsi_fill_ap_sta_info(struct slsi_dev *sdev, struct net_device *dev,
 		SLSI_CHECK_TYPE(sdev, values[3].type, SLSI_MIB_TYPE_UINT);
 		fw_tx_rate = values[3].u.uintValue;
 		slsi_decode_fw_rate(fw_tx_rate, NULL,
-				    (unsigned long *)&ap_sta_info->tx_data_rate);
+				    (unsigned long *)&ap_sta_info->tx_data_rate,
+				    NULL, NULL, NULL);
 	}
 	if (values[4].type != SLSI_MIB_TYPE_NONE) {   /* PEER_RX_RETRY_COUNTS */
 		SLSI_CHECK_TYPE(sdev, values[4].type, SLSI_MIB_TYPE_UINT);
@@ -4156,6 +4158,8 @@ int slsi_handle_disconnect(struct slsi_dev *sdev, struct net_device *dev, u8 *pe
 		if (slsi_mlme_del_vif(sdev, dev) != 0)
 			SLSI_NET_ERR(dev, "slsi_mlme_del_vif failed\n");
 		slsi_vif_deactivated(sdev, dev);
+		if (slsi_wake_lock_active(&ndev_vif->wlan_wl_sae))
+			slsi_wake_unlock(&ndev_vif->wlan_wl_sae);
 		break;
 	}
 	case FAPI_VIFTYPE_AP:
@@ -6355,7 +6359,7 @@ void slsi_roam_channel_cache_prune(struct net_device *dev, int seconds, char *ss
 	} else {
 		list_for_each_safe(pos, q, &ndev_vif->sta.network_map) {
 			network_map = list_entry(pos, struct slsi_roaming_network_map_entry, list);
-			for (i = 1; i <= (SLSI_NUM_2P4GHZ_CHANNELS + SLSI_NUM_5GHZ_CHANNELS); i++) {
+			for (i = 1; i < (SLSI_NUM_2P4GHZ_CHANNELS + SLSI_NUM_5GHZ_CHANNELS); i++) {
 				if (time_after_eq(now, network_map->channel_jiffies[i] + (seconds * HZ))) {
 					if (i <= SLSI_NUM_2P4GHZ_CHANNELS)
 						network_map->channels_24_ghz &= ~(1 << (i));
@@ -6654,7 +6658,7 @@ int slsi_read_regulatory_rules(struct slsi_dev *sdev, struct slsi_802_11d_reg_do
 
 	for (i = 0; i < sdev->regdb.country[country_index].collection->reg_rule_num; i++) {
 		if (sdev->regdb.country[country_index].collection->reg_rule[i]->flags & SLSI_REGULATORY_DUP_RULE)
-			break;
+			continue;
 		reg_rule = &domain_info->regdomain->reg_rules[num_rules++];
 
 		/* start freq 2 bytes */

@@ -1026,29 +1026,14 @@
 			resets = <0x32 0x04>;
 			pinctrl-names = "default";
 			pinctrl-0 = <0x34>;
-			status = "disabled";
-			#address-cells = <0x01>;
-			#size-cells = <0x00>;
-			phandle = <0x6f>;
-		};
-
-		rsb@7083000 {
-			compatible = "allwinner,sun8i-a23-rsb";
-			reg = <0x7083000 0x400>;
-			interrupts = <0x00 0x6c 0x04>;
-			clocks = <0x32 0x0d>;
-			clock-frequency = <0x2dc6c0>;
-			resets = <0x32 0x07>;
-			pinctrl-names = "default";
-			pinctrl-0 = <0x35>;
 			status = "okay";
 			#address-cells = <0x01>;
 			#size-cells = <0x00>;
-			phandle = <0x70>;
+			phandle = <0x6f>;
 
-			pmic@745 {
+			pmic@36 {
 				compatible = "x-powers,axp805\0x-powers,axp806";
-				reg = <0x745>;
+				reg = <0x36>;
 				interrupt-parent = <0x12>;
 				interrupts = <0x00 0x60 0x08>;
 				interrupt-controller;
@@ -1062,7 +1047,7 @@
 				aldoin-supply = <0x25>;
 				bldoin-supply = <0x25>;
 				cldoin-supply = <0x25>;
-				phandle = <0x71>;
+				phandle = <0x70>;
 
 				regulators {
 
@@ -1087,7 +1072,7 @@
 						regulator-min-microvolt = <0x325aa0>;
 						regulator-max-microvolt = <0x325aa0>;
 						regulator-name = "vcc25-dram";
-						phandle = <0x72>;
+						phandle = <0x71>;
 					};
 
 					bldo1 {
@@ -1095,7 +1080,7 @@
 						regulator-min-microvolt = <0x1b7740>;
 						regulator-max-microvolt = <0x1b7740>;
 						regulator-name = "vcc-bias-pll";
-						phandle = <0x73>;
+						phandle = <0x72>;
 					};
 
 					bldo2 {
@@ -1111,7 +1096,7 @@
 						regulator-min-microvolt = <0x1b7740>;
 						regulator-max-microvolt = <0x1b7740>;
 						regulator-name = "vcc-dcxoio";
-						phandle = <0x74>;
+						phandle = <0x73>;
 					};
 
 					bldo4 {
@@ -1129,14 +1114,14 @@
 						regulator-min-microvolt = <0x325aa0>;
 						regulator-max-microvolt = <0x325aa0>;
 						regulator-name = "vcc-wifi-1";
-						phandle = <0x75>;
+						phandle = <0x74>;
 					};
 
 					cldo3 {
 						regulator-min-microvolt = <0x325aa0>;
 						regulator-max-microvolt = <0x325aa0>;
 						regulator-name = "vcc-wifi-2";
-						phandle = <0x76>;
+						phandle = <0x75>;
 					};
 
 					dcdca {
@@ -1162,7 +1147,7 @@
 						regulator-min-microvolt = <0xea600>;
 						regulator-max-microvolt = <0xea600>;
 						regulator-name = "vdd-sys";
-						phandle = <0x77>;
+						phandle = <0x76>;
 					};
 
 					dcdce {
@@ -1170,13 +1155,28 @@
 						regulator-min-microvolt = <0x124f80>;
 						regulator-max-microvolt = <0x124f80>;
 						regulator-name = "vcc-dram";
-						phandle = <0x78>;
+						phandle = <0x77>;
 					};
 
 					sw {
 					};
 				};
 			};
+		};
+
+		rsb@7083000 {
+			compatible = "allwinner,sun8i-a23-rsb";
+			reg = <0x7083000 0x400>;
+			interrupts = <0x00 0x6c 0x04>;
+			clocks = <0x32 0x0d>;
+			clock-frequency = <0x2dc6c0>;
+			resets = <0x32 0x07>;
+			pinctrl-names = "default";
+			pinctrl-0 = <0x35>;
+			status = "disabled";
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+			phandle = <0x78>;
 		};
 
 		thermal-sensor@5070400 {
@@ -1488,21 +1488,21 @@
 		r_rsb_pins = "/soc/pinctrl@7022000/r-rsb-pins";
 		r_ir = "/soc/ir@7040000";
 		r_i2c = "/soc/i2c@7081400";
+		axp805 = "/soc/i2c@7081400/pmic@36";
+		reg_aldo1 = "/soc/i2c@7081400/pmic@36/regulators/aldo1";
+		reg_aldo2 = "/soc/i2c@7081400/pmic@36/regulators/aldo2";
+		reg_aldo3 = "/soc/i2c@7081400/pmic@36/regulators/aldo3";
+		reg_bldo1 = "/soc/i2c@7081400/pmic@36/regulators/bldo1";
+		reg_bldo2 = "/soc/i2c@7081400/pmic@36/regulators/bldo2";
+		reg_bldo3 = "/soc/i2c@7081400/pmic@36/regulators/bldo3";
+		reg_cldo1 = "/soc/i2c@7081400/pmic@36/regulators/cldo1";
+		reg_cldo2 = "/soc/i2c@7081400/pmic@36/regulators/cldo2";
+		reg_cldo3 = "/soc/i2c@7081400/pmic@36/regulators/cldo3";
+		reg_dcdca = "/soc/i2c@7081400/pmic@36/regulators/dcdca";
+		reg_dcdcc = "/soc/i2c@7081400/pmic@36/regulators/dcdcc";
+		reg_dcdcd = "/soc/i2c@7081400/pmic@36/regulators/dcdcd";
+		reg_dcdce = "/soc/i2c@7081400/pmic@36/regulators/dcdce";
 		r_rsb = "/soc/rsb@7083000";
-		axp805 = "/soc/rsb@7083000/pmic@745";
-		reg_aldo1 = "/soc/rsb@7083000/pmic@745/regulators/aldo1";
-		reg_aldo2 = "/soc/rsb@7083000/pmic@745/regulators/aldo2";
-		reg_aldo3 = "/soc/rsb@7083000/pmic@745/regulators/aldo3";
-		reg_bldo1 = "/soc/rsb@7083000/pmic@745/regulators/bldo1";
-		reg_bldo2 = "/soc/rsb@7083000/pmic@745/regulators/bldo2";
-		reg_bldo3 = "/soc/rsb@7083000/pmic@745/regulators/bldo3";
-		reg_cldo1 = "/soc/rsb@7083000/pmic@745/regulators/cldo1";
-		reg_cldo2 = "/soc/rsb@7083000/pmic@745/regulators/cldo2";
-		reg_cldo3 = "/soc/rsb@7083000/pmic@745/regulators/cldo3";
-		reg_dcdca = "/soc/rsb@7083000/pmic@745/regulators/dcdca";
-		reg_dcdcc = "/soc/rsb@7083000/pmic@745/regulators/dcdcc";
-		reg_dcdcd = "/soc/rsb@7083000/pmic@745/regulators/dcdcd";
-		reg_dcdce = "/soc/rsb@7083000/pmic@745/regulators/dcdce";
 		ths = "/soc/thermal-sensor@5070400";
 		cpu_alert = "/thermal-zones/cpu-thermal/trips/cpu-alert";
 		cpu_opp_table = "/opp-table-cpu";

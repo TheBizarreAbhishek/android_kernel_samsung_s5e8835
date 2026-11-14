@@ -2567,7 +2567,9 @@ static int set_grip_data_save(void *device_data)
 	if (sec->cmd_param[0] == 0) {	// edge handler
 		if (sec->cmd_param[1] == 0) {	// clear
 			core_data->plat_data->grip_data.edgehandler_direction = 0;
-		} else if (sec->cmd_param[1] < 3) {
+			sec->cmd_state = SEC_CMD_STATUS_OK;
+			return (mode | G_SET_EDGE_HANDLER);
+		} else if (sec->cmd_param[1] < core_data->edgehandler_direction_max) {
 			core_data->plat_data->grip_data.edgehandler_direction = sec->cmd_param[1];
 			core_data->plat_data->grip_data.edgehandler_start_y = sec->cmd_param[2];
 			core_data->plat_data->grip_data.edgehandler_end_y = sec->cmd_param[3];
@@ -2599,8 +2601,9 @@ static int set_grip_data_save(void *device_data)
 			return (mode | G_SET_LANDSCAPE_MODE);
 		}
 		ts_err("cmd1 is abnormal, %d", sec->cmd_param[1]);
+	} else {
+		ts_err("cmd0 is abnormal, %d", sec->cmd_param[0]);
 	}
-	ts_err("cmd0 is abnormal, %d", sec->cmd_param[0]);
 
 	sec->cmd_state = SEC_CMD_STATUS_FAIL;
 	return -EINVAL;

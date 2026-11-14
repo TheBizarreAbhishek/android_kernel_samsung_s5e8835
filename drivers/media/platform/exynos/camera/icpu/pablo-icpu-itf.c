@@ -24,6 +24,7 @@
 #include "pablo-icpu-msg-queue.h"
 #include "pablo-icpu-debug.h"
 #include "mbox/pablo-icpu-mbox.h"
+#include "pablo-mem.h"
 
 static struct icpu_logger _log = {
 	.level = LOGLEVEL_INFO,
@@ -1061,7 +1062,7 @@ int pablo_icpu_itf_init(void)
 	if (itf)
 		return -EBUSY;
 
-	itf = kzalloc(sizeof(struct icpu_itf), GFP_KERNEL);
+	itf = pablo_zalloc(sizeof(struct icpu_itf), GFP_KERNEL);
 	if (!itf)
 		return -ENOMEM;
 
@@ -1070,7 +1071,7 @@ int pablo_icpu_itf_init(void)
 	ret = platform_driver_register(pablo_icpu_get_platform_driver());
 	if (ret) {
 		ICPU_ERR("pablo_icpu_driver register failed(%d)", ret);
-		kfree(itf);
+		pablo_free(itf);
 		itf = NULL;
 		return ret;
 	}
@@ -1101,7 +1102,7 @@ module_init(pablo_icpu_itf_init);
 void pablo_icpu_itf_exit(void)
 {
 	if (itf)
-		kfree(itf);
+		pablo_free(itf);
 	itf = NULL;
 
 	platform_driver_unregister(pablo_icpu_get_platform_driver());

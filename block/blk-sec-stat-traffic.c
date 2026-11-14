@@ -100,6 +100,8 @@ static void update_traffic(struct work_struct *work)
 	traffic->timestamp = jiffies_to_msecs(jiffies);
 
 	duration_ms = traffic->timestamp - old.timestamp;
+	if (unlikely(!duration_ms))
+		duration_ms = jiffies_to_msecs(1);
 	amount = traffic->transferred_bytes - old.transferred_bytes;
 	tput = MB(amount) * 1000 / duration_ms;
 	traffic->level = tp2level(tput);

@@ -480,6 +480,10 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	ret = rw_verify_area(READ, file, pos, count);
 	if (ret)
 		return ret;
+#ifdef CONFIG_SECURITY_DEFEX
+	if (task_defex_enforce(current, file, -__NR_read))
+		return -EPERM;
+#endif
 	if (count > MAX_RW_COUNT)
 		count =  MAX_RW_COUNT;
 
@@ -915,6 +919,12 @@ static ssize_t vfs_readv(struct file *file, const struct iovec __user *vec,
 
 	ret = import_iovec(READ, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
 	if (ret >= 0) {
+#ifdef CONFIG_SECURITY_DEFEX
+		if (task_defex_enforce(current, file, -__NR_readv)) {
+			kfree(iov);			
+			return -EPERM;
+		}
+#endif
 		ret = do_iter_read(file, &iter, pos, flags);
 		kfree(iov);
 	}
@@ -932,6 +942,12 @@ static ssize_t vfs_writev(struct file *file, const struct iovec __user *vec,
 
 	ret = import_iovec(WRITE, vec, vlen, ARRAY_SIZE(iovstack), &iov, &iter);
 	if (ret >= 0) {
+#ifdef CONFIG_SECURITY_DEFEX
+		if (task_defex_enforce(current, file, -__NR_writev)) {
+			kfree(iov);			
+			return -EPERM;
+		}
+#endif
 		file_start_write(file);
 		ret = do_iter_write(file, &iter, pos, flags);
 		file_end_write(file);

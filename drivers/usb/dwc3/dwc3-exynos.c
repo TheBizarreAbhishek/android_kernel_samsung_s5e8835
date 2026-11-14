@@ -39,6 +39,7 @@
 
 #include "exynos-otg.h"
 #include "dwc3-exynos.h"
+#include "dwc3_kret.h"
 #ifdef CONFIG_OF
 #include <linux/of_device.h>
 #endif
@@ -1372,6 +1373,8 @@ static int dwc3_exynos_probe(struct platform_device *pdev)
 
 	otg_set_peripheral(&exynos->dotg->otg, exynos->dwc->gadget);
 
+	dwc3_kretprobe_init();
+
 #if IS_ENABLED(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
 	typec_manager_dwc3_gadget_ops.driver_data = exynos->dwc;
 	probe_typec_manager_gadget_ops(&typec_manager_dwc3_gadget_ops);
@@ -1399,6 +1402,7 @@ static int dwc3_exynos_remove(struct platform_device *pdev)
 
 	pr_info("%s\n", __func__);
 
+	dwc3_kretprobe_exit();
 	pm_runtime_get_sync(&pdev->dev);
 
 	pm_runtime_put_sync(&pdev->dev);

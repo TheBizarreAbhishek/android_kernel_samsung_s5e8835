@@ -133,12 +133,13 @@ static inline unsigned int sipc5_get_frame_len(u8 *frm)
  */
 static inline unsigned int sipc5_get_total_len(u8 *frm)
 {
-	unsigned int len;
-	unsigned int pad;
+    unsigned int len = sipc5_get_frame_len(frm);
+    unsigned int pad = sipc5_padding_exist(frm) ? sipc5_calc_padding_size(len) : 0;
 
-	len = sipc5_get_frame_len(frm);
-	pad = sipc5_padding_exist(frm) ? sipc5_calc_padding_size(len) : 0;
-	return len + pad;
+    if (len > UINT_MAX - pad)
+        return 0;
+    
+    return len + pad;
 }
 
 /*

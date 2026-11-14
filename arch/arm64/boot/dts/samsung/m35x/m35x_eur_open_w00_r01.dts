@@ -4829,6 +4829,7 @@
 				sec,watch_dog_reg = <0xd040>;
 				sec,config_id_reg = <0x10076>;
 				sec,enable_misctl_val = " p\0";
+				goodix,edgehandler_direction_max = <0x05>;
 				phandle = <0xb2>;
 			};
 		};

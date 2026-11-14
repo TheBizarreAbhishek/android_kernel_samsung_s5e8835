@@ -508,6 +508,8 @@ static int exynos_usb_audio_pcm(bool is_open, bool direction)
 	usb_msg.param1 = is_open;
 	usb_msg.param2 = direction;
 
+	if (is_open)
+		phy_set_mode_ext(g_hwinfo->phy, PHY_MODE_ABOX_POWER, 2);
 	ret = usb_msg_to_uram(dev);
 	mutex_unlock(&usb_audio.lock);
 	if (ret) {

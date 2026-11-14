@@ -1084,7 +1084,7 @@ static bool zram_should_writeback(struct zram *zram,
 	unsigned long writtenback = atomic64_read(&zram->stats.bd_objcnt) -
 				    atomic64_read(&zram->stats.bd_ppr_objcnt) -
 				    atomic64_read(&zram->stats.bd_expire);
-	unsigned long min_stored_byte;
+	unsigned long min_stored_byte = zram->disksize / 4;
 	int writtenback_ratio = stored ? (writtenback * 100) / stored : 0;
 	int min_writtenback_ratio = zram_balance_ratio;
 	int margin = max_t(int, 1, zram_balance_ratio / 10);
@@ -1110,11 +1110,6 @@ static bool zram_should_writeback(struct zram *zram,
 		min_writtenback_ratio += margin;
 	if (min_writtenback_ratio < writtenback_ratio)
 		ret = false;
-
-	if (zram->disksize / 4 > SZ_1G)
-		min_stored_byte = SZ_1G;
-	else
-		min_stored_byte = zram->disksize / 4;
 
 	if ((stored << PAGE_SHIFT) < min_stored_byte)
 		ret = false;

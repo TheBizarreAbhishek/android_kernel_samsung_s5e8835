@@ -2979,18 +2979,33 @@ void sm5714_mpsm_exit_mode_change(struct sm5714_phydrv_data *usbpd_data)
 	switch (power_role) {
 	case PDIC_SINK: /* SNK */
 #ifndef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION
-		if (data_role == USBPD_DFP) {
+		/*
+		 * Request VDM re-discovery only when alternate mode was
+		 * actually restarted (it was stopped by host block).
+		 * If only client restriction is released, alternate mode
+		 * was never stopped and DP is still configured.
+		 */
+		if (data_role == USBPD_DFP &&
+		    (!IS_ENABLED(CONFIG_BATTERY_SAMSUNG) || pd_data->altmode_restarted)) {
 			manager->alt_sended = 0;
 			manager->vdm_en = 0;
 			sm5714_info("%s : request vdm for SNK/DFP\n", __func__);
 			sm5714_usbpd_vdm_request_enabled(pd_data);
-		} else
+		} else if (data_role == USBPD_DFP)
+			sm5714_info("%s : skip vdm for SNK/DFP, alternate mode not restarted\n",
+				__func__);
+		else
 			sm5714_info("%s : do nothing for SNK/UFP\n", __func__);
 #else
 		sm5714_info("%s : do nothing for SNK/UFP\n", __func__);
 #endif
 		break;
 	case PDIC_SOURCE: /* SRC */
+#ifdef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION
+		/*
+		 * Alternate mode start is not used without lockscreen USB
+		 * restriction, so reattach as DFP to restart discovery.
+		 */
 		sm5714_info("%s : reattach to SRC\n", __func__);
 		usbpd_data->is_mpsm_exit = 1;
 		reinit_completion(&usbpd_data->exit_mpsm_completion);
@@ -3006,6 +3021,14 @@ void sm5714_mpsm_exit_mode_change(struct sm5714_phydrv_data *usbpd_data)
 		} else {
 			sm5714_err("%s: SRC reattach success\n", __func__);
 		}
+#else
+		/*
+		 * Discovery is restarted by alternate mode start if needed.
+		 * Reattach here drops VBUS and disconnects an active host
+		 * device (e.g. USB-C earphone) on every screen unlock.
+		 */
+		sm5714_info("%s : do nothing for SRC\n", __func__);
+#endif
 		break;
 	};
 }
@@ -3406,11 +3429,13 @@ static int sm5714_usbpd_notify_attach(void *data)
 	} else if (((reg_data & SM5714_ATTACH_TYPE) == SM5714_ATTACH_SINK) &&
 			check_usb_killer(pdic_data) == 0) {
 		dev_info(dev, "ccstat : cc_SOURCE\n");
+#ifdef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION
 		if (pdic_data->is_mpsm_exit) {
 			complete(&pdic_data->exit_mpsm_completion);
 			pdic_data->is_mpsm_exit = 0;
 			dev_info(dev, "exit mpsm completion\n");
 		}
+#endif
 		sm5714_usbpd_set_otg_det_gpio(pdic_data);
 #ifndef CONFIG_SEC_FACTORY
 		if (pdic_data->scr_sel == PLUG_CTRL_RP180)
@@ -4036,9 +4061,6 @@ static int sm5714_handle_usb_external_notifier_notification(
 			sm5714_mpsm_enter_mode_change(pdic_data);
 			if (manager->dp_is_connect == 1)
 				sm5714_usbpd_dp_detach(pdic_data->dev);
-		} else {
-			if (manager->dp_is_connect == 1)
-				sm5714_usbpd_dp_detach(pdic_data->dev);
 		}
 		break;
 	case EXTERNAL_NOTIFY_HOSTBLOCK_POST:
@@ -4412,7 +4434,9 @@ static int sm5714_usbpd_probe(struct i2c_client *i2c,
 			msecs_to_jiffies(2000));
 	else
 		sm5714_info("%s : external notifier register done!\n", __func__);
+#ifdef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION
 	init_completion(&pdic_data->exit_mpsm_completion);
+#endif
 	sm5714_info("%s : sm5714 usbpd driver uploaded!\n", __func__);
 	return 0;
 fail_init_irq:

@@ -17,6 +17,8 @@
 #include <linux/interrupt.h>
 #include <linux/dma-buf.h>
 
+#include "pablo-mem.h"
+
 #define PKV_VER_GT(a, b, c)	(KERNEL_VERSION((a), (b), (c)) < LINUX_VERSION_CODE)
 #define PKV_VER_GE(a, b, c)	(KERNEL_VERSION((a), (b), (c)) <= LINUX_VERSION_CODE)
 #define PKV_VER_EQ(a, b, c)	(KERNEL_VERSION((a), (b), (c)) == LINUX_VERSION_CODE)
@@ -258,5 +260,64 @@ void pkv_iommu_dma_reserve_iova_unmap(struct device *dev, dma_addr_t base, u64 s
 #define pkv_iommu_dma_reserve_iova_map(a, b, c) (0)
 #define pkv_iommu_dma_reserve_iova_unmap(a, b, c) do { } while (0)
 #endif
+
+/* cleanup helpers */
+#if PKV_VER_GE(6, 1, 79)
+#include <linux/cleanup.h>
+#else
+#include <linux/compiler.h>
+
+#undef __cleanup
+#define __cleanup(func)	__maybe_unused __attribute__((__cleanup__(func)))
+
+#define DEFINE_FREE(_name, _type, _free) \
+	static inline void __free_##_name(void *p) { _type _T = *(_type *)p; _free; }
+
+#define __free(_name)	__cleanup(__free_##_name)
+
+#define no_free_ptr(p) \
+	({ __auto_type __ptr = (p); (p) = NULL; __ptr; })
+
+#define return_ptr(p)	return no_free_ptr(p)
+
+#define DEFINE_CLASS(_name, _type, _exit, _init, _init_args...)		\
+typedef _type class_##_name##_t;					\
+static inline void class_##_name##_destructor(_type *p)			\
+{ _type _T = *p; _exit; }						\
+static inline _type class_##_name##_constructor(_init_args)		\
+{ _type t = _init; return t; }
+
+#define EXTEND_CLASS(_name, ext, _init, _init_args...)			\
+typedef class_##_name##_t class_##_name##ext##_t;			\
+static inline void class_##_name##ext##_destructor(class_##_name##_t *p)\
+{ class_##_name##_destructor(p); }					\
+static inline class_##_name##_t class_##_name##ext##_constructor(_init_args) \
+{ class_##_name##_t t = _init; return t; }
+
+#define CLASS(_name, var)						\
+	class_##_name##_t var __cleanup(class_##_name##_destructor) =	\
+		class_##_name##_constructor
+
+#define DEFINE_GUARD(_name, _type, _lock, _unlock) \
+	DEFINE_CLASS(_name, _type, _unlock, ({ _lock; _T; }), _type _T)
+
+#define guard(_name) \
+	CLASS(_name, __UNIQUE_ID(guard))
+
+#define scoped_guard(_name, args...)					\
+	for (CLASS(_name, scope)(args),					\
+	     *done = NULL; !done; done = (void *)1)
+
+#endif /* upstream cleanup helpers */
+
+/* pkv cleanup helpers */
+#define scoped_guard_begin(_name, args...)				\
+	do {								\
+		CLASS(_name, scope)(args), *done;			\
+		for (done = NULL; !done; done = (void *)1)
+#define scoped_guard_end						\
+	} while(0)
+
+DEFINE_FREE(pablo_free, void *, if (_T) pablo_free(_T))
 
 #endif /* PABLO_KERNEL_VARIANT_H */

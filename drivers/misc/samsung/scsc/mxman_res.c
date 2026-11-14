@@ -1302,6 +1302,10 @@ int mxman_res_reset(struct mxman *mxman, bool reset)
 		return r;
 	} else if (r && reset) {
 		SCSC_TAG_ERR(MXMAN, "HW reset assertion failed\n");
+#if IS_ENABLED(CONFIG_DEBUG_SNAPSHOT)
+		SCSC_TAG_INFO(MXMAN, "Trigger scandump for debugging PMU err\n");
+		mxman_scan_dump_mode();
+#endif
 		return r;
 	}
 

@@ -265,6 +265,26 @@ struct slsi_mlme_scan_timing_element {
 	u16 skip_first_period;
 } __packed;
 
+enum sta_dump_params {
+	SLSI_STA_DUMP_RSSI,
+	SLSI_STA_DUMP_ANT1RSSI,
+	SLSI_STA_DUMP_ANT2RSSI,
+	SLSI_STA_DUMP_RX_COUNTERS,
+	SLSI_STA_DUMP_TX_COUNTERS,
+	SLSI_STA_DUMP_RXBYTES,
+	SLSI_STA_DUMP_TXBYTES,
+	SLSI_STA_DUMP_RXBITRATE,
+	SLSI_STA_DUMP_TXBITRATE,
+	SLSI_STA_DUMP_RXMCS,
+	SLSI_STA_DUMP_TXMCS,
+	SLSI_STA_DUMP_RXBANDWIDTH,
+	SLSI_STA_DUMP_TXBANDWIDTH,
+	SLSI_STA_DUMP_RXNSS,
+	SLSI_STA_DUMP_TXNSS,
+	SLSI_STA_DUMP_MODE,
+	SLSI_STA_DUMP_MAX
+};
+
 static inline void slsi_mlme_put_oui_type(struct slsi_mlme_parameters *ie, u8 type, u8 subtype)
 {
 	ie->oui_type = type;
@@ -295,6 +315,12 @@ struct slsi_mlme_scan_6ghz_descriptor {
 } __packed;
 
 #endif
+
+struct slsi_sta_dump_data {
+	s16 param_field;
+	int data[SLSI_STA_DUMP_MAX];
+};
+
 struct slsi_mlme_sar_tx_power_limit {
 	u8 antenna1_2g4;
 	u8 antenna2_2g4;
@@ -421,6 +447,8 @@ int slsi_mlme_req(struct slsi_dev *sdev, struct net_device *dev, struct sk_buff 
 struct sk_buff *slsi_mlme_req_no_cfm(struct slsi_dev *sdev, struct net_device *dev, struct sk_buff *skb);
 
 struct sk_buff *slsi_mlme_req_ind(struct slsi_dev *sdev, struct net_device *dev, struct sk_buff *skb, u16 ind_id);
+void slsi_mlme_get_sta_dump(struct netdev_vif *ndev_vif, struct net_device *dev,
+									 struct slsi_sta_dump_data *dump_params);
 /* Read multiple MIBs related to station info */
 int slsi_mlme_get_sinfo_mib(struct slsi_dev *sdev, struct net_device *dev,
 			    struct slsi_peer *peer);
@@ -505,7 +533,8 @@ int slsi_mlme_start_detect_request(struct slsi_dev *sdev, struct net_device *dev
 int slsi_mlme_set_ctwindow(struct slsi_dev *sdev, struct net_device *dev, unsigned int ct_param);
 int slsi_mlme_set_p2p_noa(struct slsi_dev *sdev, struct net_device *dev, unsigned int noa_count,
 			  unsigned int interval, unsigned int duration);
-void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *data_rate_mbps);
+void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *data_rate_mbps,
+			 int *rate_nss, int *rate_bw, int * rate_mcs);
 int slsi_test_sap_configure_monitor_mode(struct slsi_dev *sdev, struct net_device *dev, struct cfg80211_chan_def *chandef);
 int slsi_mlme_delba_req(struct slsi_dev *sdev, struct net_device *dev, u8 *peer_qsta_address, u16 priority, u16 direction, u16 sequence_number, u16 reason_code);
 int slsi_mlme_configure_monitor_mode(struct slsi_dev *sdev, struct net_device *dev, struct cfg80211_chan_def *chandef);

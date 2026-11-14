@@ -3147,9 +3147,14 @@ void slsi_calc_max_data_rate(struct net_device *dev, u8 bandwidth, u8 antenna_mo
 }
 #endif
 
-void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *data_rate_mbps)
+void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *data_rate_mbps,
+			 int *rate_nss, int *rate_bw, int * rate_mcs)
 {
 	const int fw_rate_idx_to_80211_rate[] = { 0, 10, 20, 55, 60, 90, 110, 120, 180, 240, 360, 480, 540 };
+
+	u8 nss = 1;
+	u8 chan_bw_idx = 0;
+	int mcs_idx = 0;
 
 	if (rate) {
 		rate->flags = 0;
@@ -3169,8 +3174,8 @@ void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *dat
 				*data_rate_mbps = (unsigned long)fw_rate_idx_to_80211_rate[fw_rate_idx] / 10;
 		}
 	} else if ((fw_rate & SLSI_FW_API_RATE_HT_SELECTOR_FIELD) == SLSI_FW_API_RATE_HT_SELECTED) {
-		u8 mcs_idx = SLSI_FW_API_RATE_HT_MCS_FIELD & fw_rate;
-		u8 nss = ((SLSI_FW_API_RATE_HT_NSS_FIELD & fw_rate) >> 6) + 1;
+		mcs_idx = SLSI_FW_API_RATE_HT_MCS_FIELD & fw_rate;
+		nss = ((SLSI_FW_API_RATE_HT_NSS_FIELD & fw_rate) >> 6) + 1;
 
 		if (rate) {
 			rate->flags |= RATE_INFO_FLAGS_MCS;
@@ -3187,7 +3192,6 @@ void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *dat
 		}
 
 		if (data_rate_mbps) {
-			int chan_bw_idx;
 			int gi_idx;
 
 			chan_bw_idx = (fw_rate & SLSI_FW_API_RATE_BW_FIELD) >> 9;
@@ -3212,10 +3216,7 @@ void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *dat
 			}
 		}
 	} else if ((fw_rate & SLSI_FW_API_RATE_HT_SELECTOR_FIELD) == SLSI_FW_API_RATE_VHT_SELECTED) {
-		int chan_bw_idx;
 		int gi_idx;
-		int mcs_idx;
-		u8 nss;
 
 		/* report vht rate in legacy units and not as mcs index. reason: upper layers may still be not
 		 * updated with vht msc table.
@@ -3236,10 +3237,7 @@ void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *dat
 						fw_rate, chan_bw_idx, mcs_idx, nss);
 		}
 	} else if ((fw_rate & SLSI_FW_API_RATE_HE_SELECTED) == SLSI_FW_API_RATE_HE_SELECTED) {
-		int chan_bw_idx;
 		int gi_idx;
-		int mcs_idx;
-		u8 nss;
 
 		/* report vht rate in legacy units and not as mcs index. reason: upper layers may still be not
 		 * updated with vht msc table.
@@ -3260,6 +3258,174 @@ void slsi_decode_fw_rate(u32 fw_rate, struct rate_info *rate, unsigned long *dat
 						fw_rate, chan_bw_idx, mcs_idx, nss);
 		}
 	}
+
+	if (rate_nss)
+		*rate_nss = nss;
+	if (rate_bw)
+		*rate_bw = chan_bw_idx;
+	if (rate_mcs)
+		*rate_mcs = mcs_idx;
+}
+
+static int slsi_mlme_get_mib_data(struct net_device *dev, struct slsi_dev *sdev,
+				  const struct slsi_mib_get_entry *get_values,
+				  struct slsi_mib_value *values,
+				  u32 max_mib_rsp_len, u16 psids_length)
+{
+	int r = 0;
+	struct slsi_mib_data mibreq = { 0, NULL };
+	struct slsi_mib_data mibrsp = { 0, NULL };
+	u32 data_length = 0;
+	struct slsi_mib_value *mib_values;
+
+	r = slsi_mib_encode_get_list(&mibreq, psids_length, get_values);
+	if (r != SLSI_MIB_STATUS_SUCCESS)
+		return -ENOMEM;
+
+	mibrsp.data = kmalloc(max_mib_rsp_len, GFP_KERNEL);
+	if (!mibrsp.data) {
+		SLSI_NET_DBG1(dev, SLSI_MLME, "failed to allocate memory\n");
+		r = SLSI_MIB_STATUS_OUT_OF_MEMORY;
+		goto mem_free;
+	}
+
+	r = slsi_mlme_get(sdev, dev, mibreq.data, mibreq.dataLength, mibrsp.data,
+			  max_mib_rsp_len, &data_length);
+	if (r)
+		goto mem_free;
+
+	mibrsp.dataLength = data_length;
+	mib_values = slsi_mib_decode_get_list(&mibrsp, psids_length, get_values);
+	if (!mib_values) {
+		SLSI_NET_DBG1(dev, SLSI_MLME, "mib decode list failed\n");
+		r = SLSI_MIB_STATUS_UNAVAILABLE;
+		goto rsp_free;
+	}
+	memcpy(values, mib_values, sizeof(struct slsi_mib_value) * psids_length);
+	kfree(mib_values);
+rsp_free:
+	kfree(mibrsp.data);
+mem_free:
+	kfree(mibreq.data);
+	return r;
+}
+
+void slsi_mlme_get_sta_dump(struct netdev_vif *ndev_vif, struct net_device *dev,
+			    struct slsi_sta_dump_data *dump_data)
+{
+	static const struct slsi_mib_get_entry get_values[] = {
+		{ SLSI_PSID_UNIFI_RSSI, { 0, 0 } },
+		{ SLSI_PSID_UNIFI_FRAME_RX_COUNTERS, { 1, 0 } },
+		{ SLSI_PSID_UNIFI_FRAME_TX_COUNTERS, { 1, 0 } },
+		{ SLSI_PSID_UNIFI_RX_DATA_RATE, { 0, 0 } },
+		{ SLSI_PSID_UNIFI_TX_DATA_RATE, { 0, 0 } },
+	};
+	u8 max_mib_rsp_len = 32 * ARRAY_SIZE(get_values);
+	u8 mib_index = 0;
+	struct slsi_peer *peer;
+	struct slsi_dev *sdev = ndev_vif->sdev;
+	u16 psids_length = (sizeof(get_values) / sizeof(struct slsi_mib_get_entry));
+	struct slsi_mib_value *values;
+
+	if (!sdev)
+		return;
+
+	if (ndev_vif->sta.vif_status != SLSI_VIF_STATUS_CONNECTED) {
+		SLSI_NET_WARN(dev, "Sta not in connected state\n");
+		return;
+	}
+	peer = slsi_get_peer_from_qs(sdev, dev, SLSI_STA_PEER_QUEUESET);
+	if (!peer) {
+		SLSI_NET_WARN(dev, "AP peer not found\n");
+		return;
+	}
+	values = kmalloc_array((size_t)psids_length, sizeof(struct slsi_mib_value), GFP_KERNEL);
+	if (!values) {
+		SLSI_NET_DBG1(dev, SLSI_MLME, "failed to allocate memory\n");
+		return;
+	}
+
+	if (slsi_mlme_get_mib_data(dev, sdev, get_values, values, max_mib_rsp_len, psids_length)) {
+		kfree(values);
+		return;
+	}
+
+	/*rssi*/
+	if (values[mib_index].type != SLSI_MIB_TYPE_NONE) {
+		SLSI_CHECK_TYPE(sdev, values[mib_index].type, SLSI_MIB_TYPE_INT);
+		SLSI_DBG3(sdev, SLSI_MLME, "SLSI_PSID_UNIFI_RSSI = %d\n",
+			  values[mib_index].u.intValue);
+		dump_data->data[SLSI_STA_DUMP_RSSI] = values[mib_index].u.intValue;
+		dump_data->data[SLSI_STA_DUMP_ANT1RSSI] = values[mib_index].u.intValue;
+		dump_data->data[SLSI_STA_DUMP_ANT2RSSI] = values[mib_index++].u.intValue;
+		dump_data->param_field |= BIT(SLSI_STA_DUMP_ANT1RSSI)|BIT(SLSI_STA_DUMP_ANT2RSSI)|BIT(SLSI_STA_DUMP_RSSI);
+	} else {
+		SLSI_ERR(sdev, "Invalid type: PSID = 0x%x\n", get_values[mib_index++].psid);
+	}
+	/*rx good count*/
+	if (values[mib_index].type == SLSI_MIB_TYPE_UINT) {
+		SLSI_DBG3(sdev, SLSI_MLME, "SLSI_PSID_UNIFI_FRAME_RX_COUNTERS = %d\n",
+			  values[mib_index].u.intValue);
+		dump_data->param_field |= BIT(SLSI_STA_DUMP_RX_COUNTERS);
+		dump_data->data[SLSI_STA_DUMP_RX_COUNTERS] = values[mib_index++].u.intValue;
+	} else {
+		SLSI_ERR(sdev, "Invalid type: PSID = 0x%x\n", get_values[mib_index++].psid);
+	}
+	/*tx good count*/
+	if (values[mib_index].type == SLSI_MIB_TYPE_UINT) {
+		SLSI_DBG3(sdev, SLSI_MLME, "SLSI_PSID_UNIFI_FRAME_TX_COUNTERS = %d\n",
+			  values[mib_index].u.intValue);
+		dump_data->param_field |= BIT(SLSI_STA_DUMP_TX_COUNTERS);
+		dump_data->data[SLSI_STA_DUMP_TX_COUNTERS] = values[mib_index++].u.intValue;
+	} else {
+		SLSI_ERR(sdev, "Invalid type: PSID = 0x%x\n", get_values[mib_index++].psid);
+	}
+	/*rx data rate*/
+	if (values[mib_index].type != SLSI_MIB_TYPE_NONE) {
+		SLSI_CHECK_TYPE(sdev, values[mib_index].type, SLSI_MIB_TYPE_UINT);
+		SLSI_DBG3(sdev, SLSI_MLME, "SLSI_PSID_UNIFI_RX_DATA_RATE = %d\n",
+			  values[mib_index].u.intValue);
+		slsi_decode_fw_rate((u32)values[mib_index++].u.uintValue, NULL,
+				    (unsigned long *)&dump_data->data[SLSI_STA_DUMP_RXBITRATE],
+				    &dump_data->data[SLSI_STA_DUMP_RXNSS],
+				    &dump_data->data[SLSI_STA_DUMP_RXBANDWIDTH],
+				    &dump_data->data[SLSI_STA_DUMP_RXMCS]);
+		dump_data->param_field |= (BIT(SLSI_STA_DUMP_RXBITRATE) | BIT(SLSI_STA_DUMP_RXNSS) |
+					BIT(SLSI_STA_DUMP_RXBANDWIDTH) | BIT(SLSI_STA_DUMP_RXMCS));
+	} else {
+		SLSI_DBG3(sdev, SLSI_MLME, "Invalid type: PSID = 0x%x\n",
+			  get_values[mib_index++].psid);
+	}
+	/*tx data rate*/
+	if (values[mib_index].type != SLSI_MIB_TYPE_NONE) {
+		SLSI_CHECK_TYPE(sdev, values[mib_index].type, SLSI_MIB_TYPE_UINT);
+		SLSI_DBG3(sdev, SLSI_MLME, "SLSI_PSID_UNIFI_TX_DATA_RATE = %d\n",
+			  values[mib_index].u.intValue);
+		slsi_decode_fw_rate((u32)values[mib_index].u.uintValue, NULL,
+				    (unsigned long *)&dump_data->data[SLSI_STA_DUMP_TXBITRATE],
+				    &dump_data->data[SLSI_STA_DUMP_TXNSS],
+				    &dump_data->data[SLSI_STA_DUMP_TXBANDWIDTH],
+				    &dump_data->data[SLSI_STA_DUMP_TXMCS]);
+		dump_data->param_field |= (BIT(SLSI_STA_DUMP_TXBITRATE) | BIT(SLSI_STA_DUMP_TXNSS) |
+					BIT(SLSI_STA_DUMP_TXBANDWIDTH) | BIT(SLSI_STA_DUMP_TXMCS));
+	} else {
+		SLSI_DBG3(sdev, SLSI_MLME, "Invalid type: PSID = 0x%x\n",
+			  get_values[mib_index].psid);
+	}
+
+	dump_data->data[SLSI_STA_DUMP_MODE] = slsi_sta_ieee80211_mode(dev, ndev_vif->chan->center_freq);
+	if (dump_data->data[SLSI_STA_DUMP_MODE])
+		dump_data->param_field |= BIT(SLSI_STA_DUMP_MODE);
+
+	dump_data->data[SLSI_STA_DUMP_RXBYTES] = peer->sinfo.rx_bytes;
+	if (dump_data->data[SLSI_STA_DUMP_RXBYTES])
+		dump_data->param_field |= BIT(SLSI_STA_DUMP_RXBYTES);
+
+	dump_data->data[SLSI_STA_DUMP_TXBYTES] = peer->sinfo.tx_bytes;
+	if (dump_data->data[SLSI_STA_DUMP_TXBYTES])
+		dump_data->param_field |= BIT(SLSI_STA_DUMP_TXBYTES);
+
+	kfree(values);
 }
 
 int slsi_mlme_get_sinfo_mib(struct slsi_dev *sdev, struct net_device *dev,
@@ -3343,7 +3509,8 @@ int slsi_mlme_get_sinfo_mib(struct slsi_dev *sdev, struct net_device *dev,
 
 		if (values[mib_index].type != SLSI_MIB_TYPE_NONE) {
 			SLSI_CHECK_TYPE(sdev, values[mib_index].type, SLSI_MIB_TYPE_UINT);
-			slsi_decode_fw_rate((u32)values[mib_index].u.uintValue, &peer->sinfo.txrate, &ndev_vif->sta.data_rate_mbps);
+			slsi_decode_fw_rate((u32)values[mib_index].u.uintValue, &peer->sinfo.txrate,
+					    &ndev_vif->sta.data_rate_mbps, NULL, NULL, NULL);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
 			peer->sinfo.filled |= BIT(NL80211_STA_INFO_TX_BITRATE);
 #else
@@ -3356,7 +3523,8 @@ int slsi_mlme_get_sinfo_mib(struct slsi_dev *sdev, struct net_device *dev,
 
 		if (values[++mib_index].type != SLSI_MIB_TYPE_NONE) {
 			SLSI_CHECK_TYPE(sdev, values[mib_index].type, SLSI_MIB_TYPE_UINT);
-			slsi_decode_fw_rate((u32)values[mib_index].u.uintValue, &peer->sinfo.rxrate, NULL);
+			slsi_decode_fw_rate((u32)values[mib_index].u.uintValue, &peer->sinfo.rxrate,
+					    NULL, NULL, NULL, NULL);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
 			peer->sinfo.filled |= BIT(NL80211_STA_INFO_RX_BITRATE);
 #else
@@ -5362,6 +5530,8 @@ int slsi_mlme_set_country(struct slsi_dev *sdev, char *alpha2)
 			append_byte = sdev->regdb.country[country_index].collection->reg_rule[i]->max_eirp & 0xFF;
 			fapi_append_data(req, &append_byte, 1);
 			append_byte = sdev->regdb.country[country_index].collection->reg_rule[i]->flags & 0xFF;
+			if (sdev->regdb.country[country_index].collection->reg_rule[i]->flags & SLSI_REGULATORY_DUP_RULE)
+				append_byte |= SLSI_REGULATORY_FW_DUP_RULE;
 			fapi_append_data(req, &append_byte, 1);
 		}
 	}
@@ -5816,7 +5986,7 @@ int slsi_mlme_set_delayed_wakeup_type(struct slsi_dev  *sdev, struct net_device 
 	struct sk_buff *req;
 	struct sk_buff *cfm;
 	int r = 0, i = 0;
-	int alloc_data_size;
+	int alloc_data_size = 0;
 	struct slsi_mlme_parameters req_header;
 
 	WLBT_WARN_ON(!SLSI_MUTEX_IS_LOCKED(ndev_vif->vif_mutex));
@@ -5824,9 +5994,9 @@ int slsi_mlme_set_delayed_wakeup_type(struct slsi_dev  *sdev, struct net_device 
 	if (ipv4_count)
 		alloc_data_size = ipv4_count * 4 + sizeof(req_header);
 	if (ipv6_count)
-		alloc_data_size = ipv6_count * 16 + sizeof(req_header);
+		alloc_data_size = alloc_data_size + (ipv6_count * 16 + sizeof(req_header));
 	if (mac_count)
-		alloc_data_size = (mac_count * ETH_ALEN) + sizeof(req_header);
+		alloc_data_size = alloc_data_size + ((mac_count * ETH_ALEN) + sizeof(req_header));
 
 	req = fapi_alloc(mlme_delayed_wakeup_req, MLME_DELAYED_WAKEUP_REQ, ndev_vif->ifnum, alloc_data_size);
 	if (!req)

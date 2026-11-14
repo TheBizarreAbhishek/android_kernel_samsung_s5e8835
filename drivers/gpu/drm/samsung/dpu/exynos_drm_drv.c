@@ -159,31 +159,6 @@ static unsigned int exynos_drm_crtc_get_win_cnt(struct drm_crtc_state *crtc_stat
 	return num_planes;
 }
 
-static void
-exynos_drm_crtc_alloc_windows(struct drm_device *dev, struct drm_atomic_state *state)
-{
-	struct drm_crtc *crtc;
-	struct drm_crtc_state *old_crtc_state, *new_crtc_state;
-	struct exynos_drm_private *priv;
-	unsigned int win_mask;
-	int i;
-
-	for_each_oldnew_crtc_in_state(state, crtc, old_crtc_state, new_crtc_state, i) {
-		struct exynos_drm_crtc_state *new_exynos_crtc_state;
-		new_exynos_crtc_state = to_exynos_crtc_state(new_crtc_state);
-
-		if(!new_exynos_crtc_state->win_inserted)
-			continue;
-
-		/* allocate windows after swap state phase */
-		win_mask = new_exynos_crtc_state->reserved_win_mask;
-		priv = dev->dev_private;
-		mutex_lock(&priv->lock);
-		priv->available_win_mask &= ~win_mask;
-		mutex_unlock(&priv->lock);
-	}
-}
-
 static int
 exynos_atomic_check_windows(struct drm_device *dev, struct drm_atomic_state *state)
 {
@@ -237,9 +212,9 @@ exynos_atomic_check_windows(struct drm_device *dev, struct drm_atomic_state *sta
 					new_exynos_crtc_state->reserved_win_mask, win_mask,
 					priv->available_win_mask);
 
-			mutex_unlock(&priv->lock);
+			priv->available_win_mask &= ~win_mask;
 			new_exynos_crtc_state->reserved_win_mask |= win_mask;
-			new_exynos_crtc_state->win_inserted = true;
+			mutex_unlock(&priv->lock);
 		}
 	}
 
@@ -607,6 +582,40 @@ static void exynos_atomic_queue_work(struct drm_atomic_state *old_state, bool no
 	queue_work(system_highpri_wq, &old_state->commit_work);
 }
 
+static void __release_windows(struct drm_device *dev, unsigned int win_mask)
+{
+	struct exynos_drm_private *priv;
+
+	if (!win_mask)
+		return;
+
+	priv = dev->dev_private;
+	mutex_lock(&priv->lock);
+	priv->available_win_mask |= win_mask;
+	mutex_unlock(&priv->lock);
+}
+
+static void exynos_drm_rollback_windows(struct drm_atomic_state *old_state)
+{
+	struct drm_crtc *crtc;
+	struct drm_crtc_state *old_crtc_state, *new_crtc_state;
+	struct exynos_drm_crtc_state *old_exynos_crtc_state, *new_exynos_crtc_state;
+	unsigned int win_mask;
+	int i;
+
+	for_each_oldnew_crtc_in_state(old_state, crtc, old_crtc_state, new_crtc_state, i) {
+		new_exynos_crtc_state = to_exynos_crtc_state(new_crtc_state);
+		old_exynos_crtc_state = to_exynos_crtc_state(old_crtc_state);
+
+		win_mask = new_exynos_crtc_state->reserved_win_mask &
+			(~old_exynos_crtc_state->reserved_win_mask);
+		if (!win_mask)
+			continue;
+
+		__release_windows(old_state->dev, win_mask);
+	}
+}
+
 int exynos_atomic_commit(struct drm_device *dev, struct drm_atomic_state *state, bool nonblock)
 {
 	int ret;
@@ -630,8 +639,6 @@ int exynos_atomic_commit(struct drm_device *dev, struct drm_atomic_state *state,
 		drm_atomic_helper_cleanup_planes(dev, state);
 		goto err;
 	}
-
-	exynos_drm_crtc_alloc_windows(dev, state);
 
 	/*
 	 * Everything below can be run asynchronously without the need to grab
@@ -660,6 +667,10 @@ int exynos_atomic_commit(struct drm_device *dev, struct drm_atomic_state *state,
 		exynos_atomic_queue_work(state, nonblock);
 
 err:
+	/* Only the newly allocated window resources are freed in the failed commit. */
+	if (ret)
+		exynos_drm_rollback_windows(state);
+
 	DPU_ATRACE_END("exynos_atomic_commit");
 	return ret;
 }

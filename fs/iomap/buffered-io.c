@@ -17,7 +17,9 @@
 #include <linux/bio.h>
 #include <linux/sched/signal.h>
 #include <linux/migrate.h>
+#ifndef __GENKSYMS__
 #include <linux/cleancache.h>
+#endif
 #include "trace.h"
 
 #include "../internal.h"

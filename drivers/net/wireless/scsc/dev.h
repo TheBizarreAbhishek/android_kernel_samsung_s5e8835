@@ -164,6 +164,7 @@
 #define SLSI_HOSTSTATE_BASE_POS             2
 #define SLSI_HOSTSTATE_SUB6_BAND_MASK       0x0700
 #define SLSI_HOSTSTATE_SUB6_BAND_POS        8
+#define SLSI_HOSTSTATE_AIRPLANE_ACTIVE      0x2000
 #define SLSI_HOST_TAG_ARP_MASK              BIT(15)
 #define SLSI_ARP_UNPAUSE_THRESHOLD          4
 /* RTT ID: : A value (1-7) for identifying the RTT activity being requested. */

@@ -8139,7 +8139,7 @@
 		reserved_start = <0x00>;
 		dma_bit_mask = <0x20>;
 		ip_ver = <0x1600010c>;
-		debug_mode = <0x01>;
+		debug_mode = <0x00>;
 		max_num_drm_inst = <0x03>;
 		nal_q_entry_size = <0x300>;
 		nal_q_dump_size = <0x178>;

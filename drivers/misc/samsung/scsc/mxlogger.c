@@ -762,14 +762,14 @@ int mxlogger_init(struct scsc_mx *mx, struct mxlogger *mxlogger, uint32_t mem_sz
 
 	mutex_lock(&global_lock);
 	mxlogger->observers = active_global_observers;
-	if (mxlogger->observers)
-		SCSC_TAG_INFO(MXMAN, "Detected global %d observer[s]\n", active_global_observers);
-	mutex_unlock(&global_lock);
-
 	mxlogger->sync_buffer_index = 0;
 
 	mn->mxl = mxlogger;
 	list_add_tail(&mn->list, &mxlogger_list.list);
+	mutex_unlock(&global_lock);
+
+	if (mxlogger->observers)
+		SCSC_TAG_INFO(MXMAN, "Detected global %d observer[s]\n", active_global_observers);
 
 #if IS_ENABLED(CONFIG_SCSC_LOG_COLLECTION)
 	/**
@@ -893,8 +893,9 @@ void mxlogger_deinit(struct scsc_mx *mx, struct mxlogger *mxlogger)
 	scsc_log_collector_unregister_client(&mxlogger_collect_client_mxl);
 	scsc_log_collector_unregister_client(&mxlogger_collect_client_udi);
 #endif
-	mutex_lock(&mxlogger->lock);
 
+	mutex_lock(&global_lock);
+	mutex_lock(&mxlogger->lock);
 	mxlogger_to_host(mxlogger);	/* immediately before deconfigure to get a last sync rec */
 	mxlogger->configured = false;
 	mxlogger->initialized = false;
@@ -920,9 +921,12 @@ void mxlogger_deinit(struct scsc_mx *mx, struct mxlogger *mxlogger)
 
 	if (match == false)
 		SCSC_TAG_ERR(MXMAN, "FATAL, no match for given scsc_mif_abs\n");
+	mutex_unlock(&mxlogger->lock);
+	mutex_unlock(&global_lock);
+
+
 
 	SCSC_TAG_INFO(MXMAN, "End\n");
-	mutex_unlock(&mxlogger->lock);
 }
 
 int mxlogger_register_observer(struct mxlogger *mxlogger, char *name)
@@ -981,13 +985,9 @@ int mxlogger_register_global_observer(char *name)
 
 	mutex_lock(&global_lock);
 	active_global_observers++;
-
-	SCSC_TAG_INFO(MXMAN, "Register global observer[%d] -- %s\n",
-		      active_global_observers, name);
-
 	if (list_empty(&mxlogger_list.list)) {
-		SCSC_TAG_INFO(MXMAN, "No instances of mxman\n");
 		mutex_unlock(&global_lock);
+		SCSC_TAG_INFO(MXMAN, "No instances of mxman\n");
 		return -EIO;
 	}
 
@@ -997,6 +997,9 @@ int mxlogger_register_global_observer(char *name)
 	}
 
 	mutex_unlock(&global_lock);
+
+	SCSC_TAG_INFO(MXMAN, "Register global observer[%d] -- %s\n",
+		      active_global_observers, name);
 
 	return 0;
 }
@@ -1008,16 +1011,15 @@ int mxlogger_unregister_global_observer(char *name)
 	mutex_lock(&global_lock);
 	if (active_global_observers)
 		active_global_observers--;
-
-	SCSC_TAG_INFO(MXMAN, "UN-register global observer[%d] --  %s\n",
-		      active_global_observers, name);
-
 	list_for_each_entry_safe(mn, next, &mxlogger_list.list, list) {
 		/* There is a mxlogger instance */
 		mxlogger_unregister_observer(mn->mxl, name);
 	}
 
 	mutex_unlock(&global_lock);
+
+	SCSC_TAG_INFO(MXMAN, "UN-register global observer[%d] --  %s\n",
+		      active_global_observers, name);
 
 	return 0;
 }

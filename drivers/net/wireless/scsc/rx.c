@@ -2779,6 +2779,7 @@ void slsi_rx_synchronised_ind(struct slsi_dev *sdev, struct net_device *dev, str
 									      (rsn[pos + 1]));
 				} else {
 					SLSI_NET_ERR(dev, "SAE AKM Suite(00-0F-AC:8) is NOT in Probe Response\n");
+					slsi_wake_unlock(&ndev_vif->wlan_wl_sae);
 					goto exit;
 				}
 				ndev_vif->sta.use_set_pmksa = 1;
@@ -2798,8 +2799,10 @@ void slsi_rx_synchronised_ind(struct slsi_dev *sdev, struct net_device *dev, str
 		auth_request.key_mgmt_suite = ndev_vif->sta.crypto.akm_suites[0];
 
 		r = cfg80211_external_auth_request(dev, &auth_request, GFP_KERNEL);
-		if (r)
+		if (r){
 			SLSI_NET_DBG1(dev, SLSI_MLME, "cfg80211_external_auth_request failed");
+			slsi_wake_unlock(&ndev_vif->wlan_wl_sae);
+		}
 
 #if !(defined(SCSC_SEP_VERSION) && SCSC_SEP_VERSION < 11)
 		ndev_vif->sta.wpa3_auth_state = SLSI_WPA3_AUTHENTICATING;

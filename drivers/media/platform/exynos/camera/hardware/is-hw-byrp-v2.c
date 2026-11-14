@@ -254,7 +254,7 @@ static int __nocfi is_hw_byrp_open(struct is_hw_ip *hw_ip, u32 instance)
 	frame_manager_probe(hw_ip->framemgr, hw_ip->id, "HWBYRP");
 	frame_manager_open(hw_ip->framemgr, IS_MAX_HW_FRAME);
 
-	hw_ip->priv_info = vzalloc(sizeof(struct is_hw_byrp));
+	hw_ip->priv_info = pablo_zalloc(sizeof(struct is_hw_byrp), GFP_KERNEL);
 	if (!hw_ip->priv_info) {
 		mserr_hw("hw_ip->priv_info(null)", instance, hw_ip);
 		ret = -ENOMEM;
@@ -268,13 +268,15 @@ static int __nocfi is_hw_byrp_open(struct is_hw_ip *hw_ip, u32 instance)
 	hw_byrp->wdma_max_cnt = byrp_hw_g_wdma_max_cnt();
 	hw_byrp->rdma_param_max_cnt = byrp_hw_g_rdma_cfg_max_cnt();
 	hw_byrp->wdma_param_max_cnt = byrp_hw_g_wdma_cfg_max_cnt();
-	hw_byrp->rdma = vzalloc(sizeof(struct is_common_dma) * hw_byrp->rdma_max_cnt);
+	hw_byrp->rdma = pablo_zalloc(sizeof(struct is_common_dma) * hw_byrp->rdma_max_cnt,
+			GFP_KERNEL);
 	if (!hw_byrp->rdma) {
 		mserr_hw("hw_ip->rdma(null)", instance, hw_ip);
 		ret = -ENOMEM;
 		goto err_dma_alloc;
 	}
-	hw_byrp->wdma = vzalloc(sizeof(struct is_common_dma) * hw_byrp->wdma_max_cnt);
+	hw_byrp->wdma = pablo_zalloc(sizeof(struct is_common_dma) * hw_byrp->wdma_max_cnt,
+			GFP_KERNEL);
 	if (!hw_byrp->wdma) {
 		mserr_hw("hw_ip->wdma(null)", instance, hw_ip);
 		ret = -ENOMEM;
@@ -322,10 +324,10 @@ static int __nocfi is_hw_byrp_open(struct is_hw_ip *hw_ip, u32 instance)
 
 err_dma_alloc:
 	if (hw_byrp->rdma)
-		vfree(hw_byrp->rdma);
+		pablo_free(hw_byrp->rdma);
 	if (hw_byrp->wdma)
-		vfree(hw_byrp->rdma);
-	vfree(hw_ip->priv_info);
+		pablo_free(hw_byrp->rdma);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 err_alloc:
 	frame_manager_close(hw_ip->framemgr);
@@ -380,13 +382,13 @@ static int is_hw_byrp_close(struct is_hw_ip *hw_ip, u32 instance)
 
 	is_hw_byrp_finish(hw_ip, instance);
 
-	vfree(hw_byrp->rdma);
-	vfree(hw_byrp->wdma);
+	pablo_free(hw_byrp->rdma);
+	pablo_free(hw_byrp->wdma);
 
 	CALL_BUFOP(hw_byrp->pb_c_loader_payload, free, hw_byrp->pb_c_loader_payload);
 	CALL_BUFOP(hw_byrp->pb_c_loader_header, free, hw_byrp->pb_c_loader_header);
 
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 
 	frame_manager_close(hw_ip->framemgr);
@@ -1436,7 +1438,8 @@ int is_hw_byrp_probe(struct is_hw_ip *hw_ip, struct is_interface *itf,
 
 	}
 
-	hw_ip->pmio_reg_seqs = vzalloc(sizeof(struct pmio_reg_seq) * byrp_hw_g_reg_cnt());
+	hw_ip->pmio_reg_seqs = pablo_zalloc(sizeof(struct pmio_reg_seq) * byrp_hw_g_reg_cnt(),
+			GFP_KERNEL);
 	if (!hw_ip->pmio_reg_seqs) {
 		err("failed to alloc PMIO multiple write buffer");
 		pmio_field_bulk_free(hw_ip->pmio, hw_ip->pmio_fields);

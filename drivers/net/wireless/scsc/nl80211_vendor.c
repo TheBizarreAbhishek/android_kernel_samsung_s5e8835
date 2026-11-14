@@ -114,7 +114,9 @@
 #define MAX_SSID_LEN 100
 #define SLSI_MAX_NUM_RING 10
 
+#ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
 
 #ifdef CONFIG_SCSC_WLAN_ENHANCED_LOGGING
 static int mem_dump_buffer_size;
@@ -1617,6 +1619,7 @@ static int slsi_start_keepalive_offload(struct wiphy *wiphy, struct wireless_dev
 	int                      type;
 	const struct nlattr      *attr;
 	u16 ip_pkt_len = 0;
+	u16 ip_pkt_size = 0;
 	u8 *ip_pkt = NULL, *src_mac_addr = NULL, *dst_mac_addr = NULL;
 	u32 period = 0;
 	struct slsi_peer *peer;
@@ -1670,6 +1673,7 @@ static int slsi_start_keepalive_offload(struct wiphy *wiphy, struct wireless_dev
 				 r = -EINVAL;
 				 goto exit;
 			}
+			ip_pkt_size = nla_len(attr);
 			ip_pkt = (u8 *)nla_data(attr);
 			break;
 
@@ -1746,8 +1750,14 @@ static int slsi_start_keepalive_offload(struct wiphy *wiphy, struct wireless_dev
 	if (src_mac_addr)
 		SLSI_ETHER_COPY(ehdr->h_source, src_mac_addr);
 	ehdr->h_proto = cpu_to_be16(ETH_P_IP);
-	if (ip_pkt)
+	if (ip_pkt && (ip_pkt_size >= ip_pkt_len)) {
 		memcpy(skb_put(skb, ip_pkt_len), ip_pkt, ip_pkt_len);
+	} else {
+		kfree_skb(skb);
+		r = -EINVAL;
+		goto exit;
+	}
+
 
 	skb->dev = net_dev;
 	skb->protocol = ETH_P_IP;
@@ -4610,9 +4620,8 @@ static void slsi_rx_event_log_print(struct slsi_dev *sdev, struct net_device *de
 		slsi_conn_log2us_roam_scan_done(sdev, dev, timestamp);
 		if (is_zero_ether_addr(evt_info->mac_addr)) {
 			SLSI_INFO(sdev,
-				  "WIFI_EVENT_ROAM_SCAN_COMPLETE, [ROAM] RESULT NO_ROAM BSSID:" MACSTR ", Status:1\n",
-				  MAC2STR(ndev_vif->sta.bssid));
-			slsi_conn_log2us_roam_result(sdev, dev, ndev_vif->sta.bssid, timestamp, false);
+				  "WIFI_EVENT_ROAM_SCAN_COMPLETE, [ROAM] RESULT NO_ROAM Status:1\n");
+			slsi_conn_log2us_roam_result(sdev, dev, NULL, timestamp, false);
 
 		} else {
 			SLSI_INFO(sdev, "WIFI_EVENT_ROAM_SCAN_COMPLETE, [ROAM] RESULT ROAM  BSSID:" MACSTR ", \
@@ -7498,7 +7507,10 @@ static int slsi_tas_tx_sar_limit_req(struct sk_buff *skb, struct genl_info *info
 		sar_param.flags |= SLSI_TAS_SET_CTRL_BACKOFF;
 	sar_param.sar_limit = nla_get_u16(info->attrs[SLSI_TAS_ATTR_TX_SAR_LIMIT]);
 
-	slsi_mlme_tas_tx_sar_limit(sdev, &sar_param);
+	SLSI_MUTEX_LOCK(sdev->start_stop_mutex);
+	if (sdev->device_state == SLSI_DEVICE_STATE_STARTED)
+		slsi_mlme_tas_tx_sar_limit(sdev, &sar_param);
+	SLSI_MUTEX_UNLOCK(sdev->start_stop_mutex);
 
 release_lock:
 	if (slsi_wake_lock_active(&tas_info->wlan_wl_tas))
@@ -7522,7 +7534,10 @@ static int slsi_tas_short_win_num_req(struct sk_buff *skb, struct genl_info *inf
 	sar_param.flags = 0;
 	sar_param.sar_limit = nla_get_u16(info->attrs[SLSI_TAS_ATTR_TX_SAR_LIMIT]);
 
-	slsi_mlme_tas_set_short_win_num(sdev, &sar_param);
+	SLSI_MUTEX_LOCK(sdev->start_stop_mutex);
+	if (sdev->device_state == SLSI_DEVICE_STATE_STARTED)
+		slsi_mlme_tas_set_short_win_num(sdev, &sar_param);
+	SLSI_MUTEX_UNLOCK(sdev->start_stop_mutex);
 	return 0;
 }
 

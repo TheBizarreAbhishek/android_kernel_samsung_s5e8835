@@ -735,6 +735,11 @@ static bool __is_done_for_me(struct vb_queue *q,
 	struct vb_bundle **bundle,
 	struct vs4l_container_list *c)
 {
+	if (c->index >= VB_MAX_BUFFER) {
+                vision_err("Container list index out of bound\n");
+		return false;
+	}
+
 	if (q->bufs[c->index]->state != VB_BUF_STATE_DONE)
 		return false;
 

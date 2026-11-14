@@ -265,7 +265,7 @@ static const struct drm_crtc_helper_funcs exynos_crtc_helper_funcs = {
 	.atomic_disable	= exynos_drm_crtc_atomic_disable,
 };
 
-void exynos_crtc_handle_event(struct exynos_drm_crtc *exynos_crtc)
+void exynos_crtc_arm_event(struct exynos_drm_crtc *exynos_crtc)
 {
 	struct dma_fence *fence;
 	struct drm_crtc *crtc = &exynos_crtc->base;
@@ -279,12 +279,33 @@ void exynos_crtc_handle_event(struct exynos_drm_crtc *exynos_crtc)
 	WARN_ON(drm_crtc_vblank_get(crtc) != 0);
 
 	spin_lock_irqsave(&crtc->dev->event_lock, flags);
+
+	WARN_ON(exynos_crtc->event != NULL);
 	fence = event->base.fence;
 	if (fence)
 		DPU_EVENT_LOG("ARM_CRTC_OUT_FENCE", exynos_crtc, EVENT_FLAG_FENCE,
 				FENCE_FMT, FENCE_ARG(fence));
-	drm_crtc_arm_vblank_event(crtc, event);
+	exynos_crtc->event = event;
 	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
+}
+
+void exynos_crtc_send_event(struct exynos_drm_crtc *exynos_crtc)
+{
+	struct drm_device *dev;
+	unsigned long flags;
+
+	if (!exynos_crtc)
+		return;
+
+	dev = exynos_crtc->base.dev;
+	spin_lock_irqsave(&dev->event_lock, flags);
+
+	if (exynos_crtc->event) {
+		drm_send_event_locked(exynos_crtc->base.dev, &exynos_crtc->event->base);
+		exynos_crtc->event = NULL;
+		drm_crtc_vblank_put(&exynos_crtc->base);
+	}
+	spin_unlock_irqrestore(&dev->event_lock, flags);
 }
 
 static void exynos_drm_crtc_destroy(struct drm_crtc *crtc)
@@ -375,7 +396,6 @@ exynos_drm_crtc_duplicate_state(struct drm_crtc *crtc)
 	copy->wb_type = EXYNOS_WB_NONE;
 	copy->seamless_modeset = 0;
 	copy->freed_win_mask = 0;
-	copy->win_inserted = false;
 	copy->modeset_only = false;
 	copy->tui_changed = false;
 	copy->skip_frameupdate = false;

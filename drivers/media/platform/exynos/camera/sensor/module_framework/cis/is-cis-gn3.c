@@ -736,7 +736,7 @@ int sensor_gn3_cis_write16_burst(struct i2c_client *client, u16 addr, u8 *val, u
 		goto p_err;
 	}
 
-	wbuf = kmalloc((2 + (num * 2)), GFP_KERNEL);
+	wbuf = pablo_malloc((2 + (num * 2)), GFP_KERNEL);
 	if (!wbuf) {
 		ret = -ENODEV;
 		goto p_err;
@@ -770,11 +770,11 @@ int sensor_gn3_cis_write16_burst(struct i2c_client *client, u16 addr, u8 *val, u
 		goto p_err_free;
 	}
 
-	kfree(wbuf);
+	pablo_free(wbuf);
 	return 0;
 
 p_err_free:
-	kfree(wbuf);
+	pablo_free(wbuf);
 p_err:
 	return ret;
 }

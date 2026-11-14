@@ -5085,11 +5085,11 @@
 			compatible = "qcom,bam-v1.7.0";
 			qcom,controlled-remotely;
 			reg = <0x00 0x17184000 0x00 0x2a000>;
-			num-channels = <0x1f>;
+			num-channels = <0x17>;
 			interrupts = <0x00 0xa4 0x04>;
 			#dma-cells = <0x01>;
 			qcom,ee = <0x01>;
-			qcom,num-ees = <0x02>;
+			qcom,num-ees = <0x04>;
 			iommus = <0x23 0x1806 0x00>;
 			phandle = <0xaa>;
 		};

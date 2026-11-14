@@ -13,6 +13,7 @@
 
 /** Uses */
 #include <scsc/scsc_logring.h>
+#include <linux/delay.h>
 #include <linux/module.h>
 #include "mxmgmt_transport_format.h"
 #include "mifintrbit.h"
@@ -343,6 +344,7 @@ int mxmgmt_transport_init(struct mxmgmt_transport *mxmgmt_transport, struct scsc
 	memset(mxmgmt_transport, 0, sizeof(struct mxmgmt_transport));
 	num_packets = mem_length / packet_size;
 	mutex_init(&mxmgmt_transport->channel_handler_mutex);
+	spin_lock_init(&mxmgmt_transport->mxmgmt_spinlock);
 	mxmgmt_transport->mx = mx;
 	mxmgmt_transport->target = target;
 	r = mif_stream_init(&mxmgmt_transport->mif_istream, target, MIF_STREAM_DIRECTION_IN, num_packets, packet_size, mx, MIF_STREAM_INTRBIT_TYPE_ALLOC, input_handler, mxmgmt_transport);
@@ -385,6 +387,7 @@ int mxmgmt_transport_init(struct mxmgmt_transport *mxmgmt_transport, struct scsc
 	memset(mxmgmt_transport, 0, sizeof(struct mxmgmt_transport));
 	num_packets = mem_length / packet_size;
 	mutex_init(&mxmgmt_transport->channel_handler_mutex);
+	spin_lock_init(&mxmgmt_transport->mxmgmt_spinlock);
 	mxmgmt_transport->mx = mx;
 	r = mif_stream_init(&mxmgmt_transport->mif_istream, SCSC_MIF_ABS_TARGET_WLAN, MIF_STREAM_DIRECTION_IN, num_packets, packet_size, mx, MIF_STREAM_INTRBIT_TYPE_ALLOC, input_irq_handler, mxmgmt_transport);
 	if (r) {
@@ -429,15 +432,19 @@ void mxmgmt_transport_send(struct mxmgmt_transport *mxmgmt_transport, enum mxmgr
 	struct mxmgr_message transport_msg = { .channel_id = channel_id };
 	bool res = false;
 	uint32_t i = WRITE_RETRY;
-
+	unsigned long       flags;
 
 	const void           *bufs[2] = { &transport_msg.channel_id, message };
 	uint32_t             buf_lengths[2] = { sizeof(transport_msg.channel_id), message_length };
 
 	while (i-- && res == false) {
+		spin_lock_irqsave(&mxmgmt_transport->mxmgmt_spinlock, flags);
 		res = mif_stream_write_gather(&mxmgmt_transport->mif_ostream, bufs, buf_lengths, 2);
-		if (res == false)
+		spin_unlock_irqrestore(&mxmgmt_transport->mxmgmt_spinlock, flags);
+		if (res == false) {
 			SCSC_TAG_ERR(MXMGT_TRANS, "mif_stream_write_gather message error. Channel %d message_len %u. Retries %u left %u\n",
 						  channel_id, message_length, WRITE_RETRY, i);
+			mdelay(10);
+		}
 	}
 }

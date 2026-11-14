@@ -1364,7 +1364,22 @@ void sm5714_set_enable_alternate_mode(int mode)
 		}
 
 		if (mode & ALTERNATE_MODE_START) {
+			/*
+			 * Alternate mode was not stopped (e.g. client-only
+			 * restriction released on unlock), so skip the VDM
+			 * re-discovery. The READY | START request at init is
+			 * always processed.
+			 */
+			if (!(mode & ALTERNATE_MODE_READY) &&
+			    prev_alternate_mode == ALTERNATE_MODE_START) {
+				pd_data->altmode_enable = 1;
+				pd_data->altmode_restarted = false;
+				sm5714_info("%s: alternate mode is already started, skip\n",
+					__func__);
+				return;
+			}
 			pd_data->altmode_enable = 1;
+			pd_data->altmode_restarted = true;
 			prev_alternate_mode = ALTERNATE_MODE_START;
 			sm5714_info("%s: alternate mode is started!\n", __func__);
 			pd_data->phy_ops.get_data_role(pd_data, &data_role);
@@ -1376,6 +1391,7 @@ void sm5714_set_enable_alternate_mode(int mode)
 			}
 		} else if (mode & ALTERNATE_MODE_STOP) {
 			pd_data->altmode_enable = 0;
+			prev_alternate_mode = ALTERNATE_MODE_STOP;
 			sm5714_info("%s: alternate mode is stopped!\n", __func__);
 		}
 	}
