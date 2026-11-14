@@ -504,10 +504,6 @@ jobs:
 
                   echo "✅ DTBOs ready"
 
-            - name: Collect Mali KMD module
-              run: |
-                  find out -name 'mali_kbase*.ko' -print -exec cp {} "$HOME/AnyKernel3/" \; || true
-
             - name: Create flashable zip
               run: |
                   set -euo pipefail
