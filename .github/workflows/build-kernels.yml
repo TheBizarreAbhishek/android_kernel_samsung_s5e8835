@@ -41,7 +41,7 @@ on:
             prerelease:
                 description: "Mark the GitHub release as a prerelease"
                 required: false
-                default: false
+                default: true
                 type: boolean
             notifications:
                 description: "Telegram: post release messages"
@@ -503,6 +503,10 @@ jobs:
                     $(ls $OUT/dts/samsung/a35x/*.dtbo | sort)
 
                   echo "✅ DTBOs ready"
+
+            - name: Collect Mali KMD module
+              run: |
+                  find out -name 'mali_kbase*.ko' -print -exec cp {} "$HOME/AnyKernel3/" \; || true
 
             - name: Create flashable zip
               run: |

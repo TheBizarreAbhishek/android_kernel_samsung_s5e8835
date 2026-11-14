@@ -2,6 +2,12 @@ name: Build r54p3 test (ksunext-susfs)
 
 on:
     workflow_dispatch:
+        inputs:
+            prerelease:
+                description: "Mark the GitHub release as a prerelease"
+                required: false
+                default: true
+                type: boolean
 
 permissions:
     contents: write
@@ -461,3 +467,52 @@ jobs:
                   path: /home/runner/AnyKernel3/*.zip
                   if-no-files-found: error
                   retention-days: 14
+
+    publish-release:
+        name: Publish GitHub Pre-Release
+        needs: [build]
+        runs-on: ubuntu-latest
+        if: >-
+            always() && !cancelled() &&
+            (needs.build.result == 'success')
+        steps:
+            - name: Set release metadata
+              id: meta
+              run: |
+                  DATE=$(date +'%Y-%m-%d')
+                  TAG="dev-r54p3-${DATE}-r${{ github.run_number }}"
+                  echo "DATE=$DATE" >> "$GITHUB_OUTPUT"
+                  echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+
+            - name: Download kernel artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: Bizarre-Kernel-ksunext-susfs-${{ steps.meta.outputs.DATE }}
+                  path: /home/runner/release
+
+            - name: Publish to GitHub Releases
+              uses: softprops/action-gh-release@v2.6.1
+              with:
+                  files: /home/runner/release/*.zip
+                  name: Bizarre Kernel Dev (r54p3 Mali Valhall) - ${{ steps.meta.outputs.DATE }}
+                  tag_name: ${{ steps.meta.outputs.TAG }}
+                  prerelease: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.prerelease != 'false' }}
+                  make_latest: false
+                  overwrite_files: true
+                  body: |
+                      ### ⚠️ Bizarre Kernel Dev Pre-Release (Mali Valhall r54p3 Port)
+                      **Experimental test build for ported ARM Mali Valhall r54p3 GPU drivers.**
+
+                      ### 📦 Flashable Package
+                      - Includes Kernel `Image`, DTBOs for M35/A35, and `mali_kbase.ko` (r54p3).
+
+                      ### 📱 Userspace GPU Driver
+                      - Flash the matching `r54p1` Magisk module (`Exynos_Valhall_GPUDriver-r54p1-*.zip`) in Magisk / KernelSU after flashing this kernel.
+
+                      ### 🛠️ Build Specs
+                      - **Base:** android13-5.15.220
+                      - **Target Devices:** Samsung Galaxy M35 5G / A35 5G (`s5e8835`)
+                      - **Root & Stealth:** KernelSU-Next (pershoot v3.4.2 stable) + SUSFS
+                      - **GPU KMD:** Mali Valhall r54p3
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
