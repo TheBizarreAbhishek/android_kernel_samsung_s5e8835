@@ -576,6 +576,9 @@ jobs:
                   echo "📦 Unpacking module..."
                   unzip -q "$MODULE_TMP/base_module.zip" -d "$MODULE_TMP/pkg"
 
+                  echo "✂️ Stripping unused OpenCL bloat (~35MB) for s5e8835..."
+                  rm -rf "$MODULE_TMP/pkg/compat_opencl"
+
                   echo "✍️ Setting author and name in module.prop..."
                   sed -i 's/^author=.*/author=Abhishek Babu/g' "$MODULE_TMP/pkg/module.prop"
                   sed -i 's/^name=.*/name=Bizarre Exynos Valhall GPU Driver [r54p1] (s5e8835 \/ Exynos 1380)/g' "$MODULE_TMP/pkg/module.prop"
@@ -587,7 +590,7 @@ jobs:
                   GPU_ZIP="/home/runner/release/Bizarre-GPU-Driver-r54p1-${{ steps.date.outputs.DATE }}.zip"
                   echo "📦 Packaging $GPU_ZIP..."
                   cd "$MODULE_TMP/pkg"
-                  7z a "$GPU_ZIP" . -xr'!*.git*' | tail -1
+                  7z a -mx=9 "$GPU_ZIP" . -xr'!*.git*' | tail -1
                   echo "✅ GPU Driver Magisk module packaged successfully!"
 
             - name: Publish to GitHub Releases
