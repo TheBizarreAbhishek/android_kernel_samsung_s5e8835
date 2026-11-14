@@ -490,6 +490,35 @@ jobs:
                   name: Bizarre-Kernel-ksunext-susfs-${{ steps.meta.outputs.DATE }}
                   path: /home/runner/release
 
+            - name: Build & Package Magisk GPU Driver Module
+              run: |
+                  set -euo pipefail
+                  echo "⬇️ Downloading Exynos Valhall GPU Driver (r54p1)..."
+                  MODULE_TMP=$(mktemp -d)
+                  DOWNLOAD_URL=$(curl -s https://api.github.com/repos/Flopster101/Exynos_Valhall_GPUDriver/releases | grep "browser_download_url.*r54p1.*\.zip" | head -1 | cut -d '"' -f 4 || true)
+                  if [[ -z "$DOWNLOAD_URL" ]]; then
+                    DOWNLOAD_URL="https://github.com/Flopster101/Exynos_Valhall_GPUDriver/releases/download/r1/Exynos_Valhall_GPUDriver-r54p1-cc2da1b-v1.0.0-1.zip"
+                  fi
+                  echo "Downloading: $DOWNLOAD_URL"
+                  curl -LSs -o "$MODULE_TMP/base_module.zip" "$DOWNLOAD_URL"
+
+                  echo "📦 Unpacking module..."
+                  unzip -q "$MODULE_TMP/base_module.zip" -d "$MODULE_TMP/pkg"
+
+                  echo "✍️ Setting author and name in module.prop..."
+                  sed -i 's/^author=.*/author=Abhishek Babu/g' "$MODULE_TMP/pkg/module.prop"
+                  sed -i 's/^name=.*/name=Bizarre Exynos Valhall GPU Driver [r54p1] (s5e8835 \/ Exynos 1380)/g' "$MODULE_TMP/pkg/module.prop"
+                  sed -i 's/^description=.*/description=Bizarre Mali Valhall GPU driver (r54p1 userspace) for Exynos 1380 (Mali-G68 MP5). Requires Bizarre Kernel r54p3 KMD./g' "$MODULE_TMP/pkg/module.prop"
+
+                  echo "--- module.prop ---"
+                  cat "$MODULE_TMP/pkg/module.prop"
+
+                  GPU_ZIP="/home/runner/release/Bizarre-GPU-Driver-r54p1-${{ steps.meta.outputs.DATE }}.zip"
+                  echo "📦 Packaging $GPU_ZIP..."
+                  cd "$MODULE_TMP/pkg"
+                  7z a "$GPU_ZIP" . -xr'!*.git*' | tail -1
+                  echo "✅ GPU Driver Magisk module packaged successfully!"
+
             - name: Publish to GitHub Releases
               uses: softprops/action-gh-release@v2.6.1
               with:
