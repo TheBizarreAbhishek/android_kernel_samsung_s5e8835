@@ -487,23 +487,6 @@ jobs:
                   echo "✅ Kernel Image found — Size: $IMAGE_SIZE"
                   echo "IMAGE_SIZE=$IMAGE_SIZE" >> "$GITHUB_ENV"
 
-            - name: Collect DTBOs per device
-              run: |
-                  set -euo pipefail
-                  OUT=$GITHUB_WORKSPACE/out/arch/arm64/boot
-
-                  echo "📦 Packing M35x DTBOs..."
-                  python3 scripts/mkdtboimg.py create \
-                    dtbo-m35x.img \
-                    $(ls $OUT/dts/samsung/m35x/*.dtbo | sort)
-
-                  echo "📦 Packing A35x DTBOs..."
-                  python3 scripts/mkdtboimg.py create \
-                    dtbo-a35x.img \
-                    $(ls $OUT/dts/samsung/a35x/*.dtbo | sort)
-
-                  echo "✅ DTBOs ready"
-
             - name: Create flashable zip
               run: |
                   set -euo pipefail
@@ -513,10 +496,8 @@ jobs:
 
                   echo "📦 Packaging into $ZIP_NAME..."
                   cp "$GITHUB_WORKSPACE/out/arch/arm64/boot/Image" "$HOME/AnyKernel3/"
-                  cp dtbo-m35x.img "$HOME/AnyKernel3/"
-                  cp dtbo-a35x.img "$HOME/AnyKernel3/"
 
-                  # Remove module processing from main AnyKernel3 to keep kernel size small (~21MB)
+                  # Remove module processing from main AnyKernel3 to keep kernel size small (~19MB)
                   rm -rf "$HOME/AnyKernel3/modules"
                   sed -i 's/do.modules=1/do.modules=0/g' "$HOME/AnyKernel3/anykernel.sh"
                   sed -i 's/do.systemless=1/do.systemless=0/g' "$HOME/AnyKernel3/anykernel.sh"
