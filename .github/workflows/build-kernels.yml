@@ -556,58 +556,48 @@ jobs:
                   curl -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/rt2870.bin" -o "$NH_DIR/system/etc/firmware/rt2870.bin"
 
                   echo "📝 Creating module.prop..."
-                  cat <<'EOF' > "$NH_DIR/module.prop"
-id=bizarre_nethunter_wifi
-name=Bizarre NetHunter Wireless Drivers (ath9k / rt2800 / rtl8187)
-version=v1.0
-versionCode=1
-author=Abhishek Babu
-description=Systemlessly provides kernel modules (.ko) and firmware for external USB Wi-Fi adapters (Atheros AR9271, Ralink RT3070, Realtek RTL8187) for NetHunter packet injection and monitor mode on s5e8835.
-EOF
+                  printf '%s\n' \
+                    'id=bizarre_nethunter_wifi' \
+                    'name=Bizarre NetHunter Wireless Drivers (ath9k / rt2800 / rtl8187)' \
+                    'version=v1.0' \
+                    'versionCode=1' \
+                    'author=Abhishek Babu' \
+                    'description=Systemlessly provides kernel modules (.ko) and firmware for external USB Wi-Fi adapters (Atheros AR9271, Ralink RT3070, Realtek RTL8187) for NetHunter packet injection and monitor mode on s5e8835.' \
+                    > "$NH_DIR/module.prop"
 
                   echo "📝 Creating service.sh..."
-                  cat <<'EOF' > "$NH_DIR/service.sh"
-#!/system/bin/sh
-MODDIR=${0%/*}
-sleep 5
-
-# Load wireless core stacks
-for mod in cfg80211.ko mac80211.ko; do
-    [ -f "$MODDIR/system/lib/modules/$mod" ] && insmod "$MODDIR/system/lib/modules/$mod" 2>/dev/null
-done
-
-# Load hardware drivers
-for mod in ath.ko ath9k_hw.ko ath9k_common.ko ath9k_htc.ko rt2x00lib.ko rt2x00usb.ko rt2800lib.ko rt2800usb.ko rtl8187.ko; do
-    [ -f "$MODDIR/system/lib/modules/$mod" ] && insmod "$MODDIR/system/lib/modules/$mod" 2>/dev/null
-done
-EOF
+                  {
+                    echo '#!/system/bin/sh'
+                    echo 'MODDIR=${0%/*}'
+                    echo 'sleep 5'
+                    echo 'for mod in cfg80211.ko mac80211.ko; do'
+                    echo '    [ -f "$MODDIR/system/lib/modules/$mod" ] && insmod "$MODDIR/system/lib/modules/$mod" 2>/dev/null'
+                    echo 'done'
+                    echo 'for mod in ath.ko ath9k_hw.ko ath9k_common.ko ath9k_htc.ko rt2x00lib.ko rt2x00usb.ko rt2800lib.ko rt2800usb.ko rtl8187.ko; do'
+                    echo '    [ -f "$MODDIR/system/lib/modules/$mod" ] && insmod "$MODDIR/system/lib/modules/$mod" 2>/dev/null'
+                    echo 'done'
+                  } > "$NH_DIR/service.sh"
                   chmod 0755 "$NH_DIR/service.sh"
 
                   echo "📝 Creating Magisk installer wrapper..."
-                  cat <<'EOF' > "$NH_DIR/META-INF/com/google/android/updater-script"
-#MAGISK
-EOF
-                  cat <<'EOF' > "$NH_DIR/META-INF/com/google/android/update-binary"
-#!/sbin/sh
-umask 022
-ui_print() { echo "$1"; }
-require_new_magisk() {
-  ui_print "Please install Magisk v20.4+ / KernelSU / APatch!"
-  exit 1
-}
-OUTFD=$2
-ZIPFILE=$3
-[ -f /data/adb/magisk/util_functions.sh ] || [ -f /data/adb/ksu/util_functions.sh ] || [ -f /data/adb/ap/util_functions.sh ] || true
-if [ -f /data/adb/magisk/util_functions.sh ]; then
-  . /data/adb/magisk/util_functions.sh
-elif [ -f /data/adb/ksu/util_functions.sh ]; then
-  . /data/adb/ksu/util_functions.sh
-elif [ -f /data/adb/ap/util_functions.sh ]; then
-  . /data/adb/ap/util_functions.sh
-fi
-install_module
-exit 0
-EOF
+                  echo '#MAGISK' > "$NH_DIR/META-INF/com/google/android/updater-script"
+                  {
+                    echo '#!/sbin/sh'
+                    echo 'umask 022'
+                    echo 'ui_print() { echo "$1"; }'
+                    echo 'OUTFD=$2'
+                    echo 'ZIPFILE=$3'
+                    echo '[ -f /data/adb/magisk/util_functions.sh ] || [ -f /data/adb/ksu/util_functions.sh ] || [ -f /data/adb/ap/util_functions.sh ] || true'
+                    echo 'if [ -f /data/adb/magisk/util_functions.sh ]; then'
+                    echo '  . /data/adb/magisk/util_functions.sh'
+                    echo 'elif [ -f /data/adb/ksu/util_functions.sh ]; then'
+                    echo '  . /data/adb/ksu/util_functions.sh'
+                    echo 'elif [ -f /data/adb/ap/util_functions.sh ]; then'
+                    echo '  . /data/adb/ap/util_functions.sh'
+                    echo 'fi'
+                    echo 'install_module'
+                    echo 'exit 0'
+                  } > "$NH_DIR/META-INF/com/google/android/update-binary"
                   chmod 0755 "$NH_DIR/META-INF/com/google/android/update-binary"
 
                   NH_ZIP="Bizarre-NetHunter-WiFi-Modules-${{ env.DATE }}.zip"
