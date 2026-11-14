@@ -470,6 +470,7 @@ jobs:
 
                   echo "🔍 Collecting wireless kernel modules (.ko)..."
                   find "$GITHUB_WORKSPACE/out" \( -path "*/wireless/*" -o -path "*/mac80211/*" \) -name "*.ko" -print -exec cp {} "$NH_DIR/system/lib/modules/" \;
+                  "${{ env.TOOLCHAIN_DIR }}/bin/llvm-strip" --strip-debug "$NH_DIR/system/lib/modules/"*.ko 2>/dev/null || true
 
                   echo "⬇️ Downloading NetHunter Wi-Fi firmware blobs from kernel.org..."
                   curl -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath9k_htc/htc_9271-1.4.0.fw" -o "$NH_DIR/system/etc/firmware/htc_9271-1.4.0.fw"
