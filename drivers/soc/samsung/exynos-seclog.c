@@ -39,6 +39,9 @@
 
 static struct seclog_data ldata;
 static struct seclog_ctx slog_ctx;
+#ifndef CONFIG_VENDOR_NR_CPUS
+#define CONFIG_VENDOR_NR_CPUS 8
+#endif
 static struct sec_log_info *sec_log[CONFIG_VENDOR_NR_CPUS];
 
 
