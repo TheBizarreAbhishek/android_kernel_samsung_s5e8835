@@ -1168,7 +1168,7 @@ static void itmon_report_traceinfo(struct itmon_dev *itmon,
 	char temp_buf[SZ_128];
 #endif
 	/* SEC DEBUG FEATURE */
-	int acon = (itmon_get_dpm_policy(itmon) > 0) ? 1 : 0;
+	__maybe_unused int acon = (itmon_get_dpm_policy(itmon) > 0) ? 1 : 0;
 	/* SEC DEBUG FEATURE */
 
 	if (!info->dirty)
@@ -1239,7 +1239,7 @@ static void itmon_report_pathinfo(struct itmon_dev *itmon,
 	struct itmon_nodeinfo *m_node = data->m_node;
 	struct itmon_nodeinfo *det_node = data->det_node;
 	/* SEC DEBUG FEATURE */
-	int acon = (itmon_get_dpm_policy(itmon) > 0) ? 1 : 0;
+	__maybe_unused int acon = (itmon_get_dpm_policy(itmon) > 0) ? 1 : 0;
 	/* SEC DEBUG FEATURE */
 
 	if (!m_node || !det_node)
