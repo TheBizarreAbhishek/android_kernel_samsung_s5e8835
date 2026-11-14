@@ -17,6 +17,7 @@
 #include "pablo-icpu-core.h"
 #include "mbox/pablo-icpu-mbox.h"
 #include "mem/pablo-icpu-mem.h"
+#include "pablo-mem.h"
 
 #if IS_ENABLED(CONFIG_ARCH_VELOCE_HYCON)
 #define TIMEOUT_ICPU			10000
@@ -383,7 +384,7 @@ static int __set_control(const char *val, const struct kernel_param *kp)
 		return -1;
 	}
 
-	pbuf = vzalloc(val_len + 1);
+	pbuf = pablo_zalloc(val_len + 1, GFP_KERNEL);
 	if (!pbuf) {
 		ICPU_ERR("sorry, internal error. please retry\n");
 		return -1;
@@ -400,14 +401,14 @@ static int __set_control(const char *val, const struct kernel_param *kp)
 		ctrl_id = __get_control_id(str);
 		if (ctrl_id == CTRL_INVALID) {
 			ICPU_ERR("unknown control (%s)\n", str);
-			vfree(pbuf);
+			pablo_free(pbuf);
 			return -1;
 		}
 
 		ret = __ctrl_ops[ctrl_id](&pstr);
 		if (ret) {
 			ICPU_ERR("fail to control ret(%d)\n", ret);
-			vfree(pbuf);
+			pablo_free(pbuf);
 			return ret;
 		}
 
@@ -415,7 +416,7 @@ static int __set_control(const char *val, const struct kernel_param *kp)
 		str = NULL;
 	} while (str);
 
-	vfree(pbuf);
+	pablo_free(pbuf);
 
 	ICPU_INFO("OK\n");
 
@@ -562,7 +563,7 @@ static int __set_msg(const char *val, const struct kernel_param *kp)
 		return -1;
 	}
 
-	pbuf = vzalloc(val_len + 1);
+	pbuf = pablo_zalloc(val_len + 1, GFP_KERNEL);
 	if (!pbuf) {
 		ICPU_ERR("sorry, internal error. please retry\n");
 		return -1;
@@ -578,13 +579,13 @@ static int __set_msg(const char *val, const struct kernel_param *kp)
 	ret = kstrtol(str, 0, &num_data);
 	if (ret) {
 		ICPU_ERR("check input, ret(%d)\n", ret);
-		vfree(pbuf);
+		pablo_free(pbuf);
 		return ret;
 	}
 
-	if (num_data > 16) {
+	if (num_data > 16 || num_data < 0) {
 		ICPU_ERR("Max num of data is 16 but, %ld\n", num_data);
-		vfree(pbuf);
+		pablo_free(pbuf);
 		return -1;
 	}
 
@@ -596,7 +597,7 @@ static int __set_msg(const char *val, const struct kernel_param *kp)
 
 		if (!str) {
 			ICPU_ERR("invalid param, check input\n");
-			vfree(pbuf);
+			pablo_free(pbuf);
 			return -1;
 		}
 
@@ -610,12 +611,12 @@ static int __set_msg(const char *val, const struct kernel_param *kp)
 		}
 		if (ret < 0) {
 			ICPU_ERR("data is invalid, check input. ret(%d)\n", ret);
-			vfree(pbuf);
+			pablo_free(pbuf);
 			return ret;
 		}
 	}
 
-	vfree(pbuf);
+	pablo_free(pbuf);
 
 	box->msg[box->num_msg].valid = 1;
 	box->msg[box->num_msg].num_data = num_data;
@@ -656,6 +657,8 @@ static int __query_msg(char *buffer, const struct kernel_param *kp)
 		if (i >= 16)
 			continue;
 		for (j = 0; j < box->msg[0].num_data; j++) {
+			if (j >= 16)
+				break;
 			len += sprintf(buffer + len, "\t\t.data[%d]: 0x%x(dec. %d)\n", j,
 					box->msg[i].data[j], box->msg[i].data[j]);
 		}

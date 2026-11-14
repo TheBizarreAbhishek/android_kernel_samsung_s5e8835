@@ -983,7 +983,7 @@ static void __gdc_init_pmio(struct kunit *test)
 
 	reg_cnt = camerapp_hw_gdc_g_reg_cnt();
 
-	gdc->pmio_reg_seqs = vzalloc(sizeof(struct pmio_reg_seq) * reg_cnt);
+	gdc->pmio_reg_seqs = pablo_zalloc(sizeof(struct pmio_reg_seq) * reg_cnt, GFP_KERNEL);
 	if (!gdc->pmio_reg_seqs) {
 		pmio_field_bulk_free(gdc->pmio, gdc->pmio_fields);
 		pmio_exit(gdc->pmio);
@@ -997,7 +997,7 @@ static void __gdc_exit_pmio(struct kunit *test)
 	struct gdc_dev *gdc = tctx->gdc;
 
 	if (gdc->pmio_reg_seqs)
-		vfree(gdc->pmio_reg_seqs);
+		pablo_free(gdc->pmio_reg_seqs);
 
 	if (gdc->pmio) {
 		if (gdc->pmio_fields)

@@ -430,7 +430,7 @@ static int __nocfi is_hw_mcfp_open(struct is_hw_ip *hw_ip, u32 instance)
 	frame_manager_probe(hw_ip->framemgr, hw_ip->id, "HWMCFP");
 	frame_manager_open(hw_ip->framemgr, IS_MAX_HW_FRAME);
 
-	hw_ip->priv_info = vzalloc(sizeof(struct is_hw_mcfp));
+	hw_ip->priv_info = pablo_zalloc(sizeof(struct is_hw_mcfp), GFP_KERNEL);
 	if (!hw_ip->priv_info) {
 		mserr_hw("hw_ip->priv_info(null)", instance, hw_ip);
 		ret = -ENOMEM;
@@ -492,7 +492,7 @@ err_iqset_alloc:
 	CALL_HW_HELPER_OPS(hw_ip, close, instance, &hw_mcfp->lib[instance]);
 
 err_chain_create:
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 err_alloc:
 	frame_manager_close(hw_ip->framemgr);
@@ -577,7 +577,7 @@ static int is_hw_mcfp_close(struct is_hw_ip *hw_ip, u32 instance)
 
 	CALL_HW_HELPER_OPS(hw_ip, free_iqset);
 
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 
 	frame_manager_close(hw_ip->framemgr);
@@ -1897,7 +1897,7 @@ int is_hw_mcfp_probe(struct is_hw_ip *hw_ip, struct is_interface *itf,
 
 	}
 
-	hw_ip->pmio_reg_seqs = vzalloc(sizeof(struct pmio_reg_seq) * mcfp_hw_g_reg_cnt());
+	hw_ip->pmio_reg_seqs = pablo_zalloc(sizeof(struct pmio_reg_seq) * mcfp_hw_g_reg_cnt(), GFP_KERNEL);
 	if (!hw_ip->pmio_reg_seqs) {
 		err("failed to alloc PMIO multiple write buffer");
 		pmio_field_bulk_free(hw_ip->pmio, hw_ip->pmio_fields);

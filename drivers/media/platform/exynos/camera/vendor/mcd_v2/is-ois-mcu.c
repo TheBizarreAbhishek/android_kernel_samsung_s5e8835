@@ -3607,16 +3607,6 @@ int ois_mcu_get_hall_data(struct v4l2_subdev *subdev, struct is_ois_hall_data *h
 		val_sum = (val[1] << 8) | val[0];
 		halldata->yAngleWide[index] = val_sum;
 
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_WIDE_X_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_WIDE_X_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->xAngVelWide[index] = val_sum;
-
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_WIDE_Y_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_WIDE_Y_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->yAngVelWide[index] = val_sum;
-
 		index++;
 
 		if (index >= NUM_OF_HALLDATA_AT_ONCE) {
@@ -3639,15 +3629,6 @@ int ois_mcu_get_hall_data(struct v4l2_subdev *subdev, struct is_ois_hall_data *h
 		val_sum = (val[1] << 8) | val[0];
 		halldata->yAngleTele[index] = val_sum;
 
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE_X_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE_X_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->xAngVelTele[index] = val_sum;
-
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE_Y_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE_Y_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->yAngVelTele[index] = val_sum;
 		index++;
 
 		if (index >= NUM_OF_HALLDATA_AT_ONCE)
@@ -3669,37 +3650,12 @@ int ois_mcu_get_hall_data(struct v4l2_subdev *subdev, struct is_ois_hall_data *h
 		val_sum = (val[1] << 8) | val[0];
 		halldata->yAngleTele2[index] = val_sum;
 
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE2_X_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE2_X_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->xAngVelTele2[index] = val_sum;
-
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE2_Y_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_TELE2_Y_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->yAngVelTele2[index] = val_sum;
 		index++;
 
 		if (index >= NUM_OF_HALLDATA_AT_ONCE)
 			break;
 	}
 #endif
-
-	/* Z-axis data */
-	index = 0;
-	valid_cnt = valid_cnt / 4;  //= valid * 2
-
-	for (i = 0; i < valid_cnt; i += 2) {
-		val[0] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_Z_ANGVEL_0 + i);
-		val[1] = is_mcu_get_reg_u8(mcu->regs[OM_REG_CORE], R_OIS_CMD_HALL_Z_ANGVEL_0 + i + 1);
-		val_sum = (val[1] << 8) | val[0];
-		halldata->zAngVel[index] = val_sum;
-
-		index++;
-
-		if (index >= NUM_OF_HALLDATA_AT_ONCE)
-			break;
-	}
 
 	/* delay between write irq & read irq */
 	usleep_range(250, 260);

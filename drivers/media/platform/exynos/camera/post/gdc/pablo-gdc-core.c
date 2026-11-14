@@ -983,11 +983,11 @@ static int gdc_v4l2_s_ext_ctrls(struct file * file, void * priv,
 			{
 				ret = copy_from_user(ctx->crop_param, ext_ctrl->ptr, sizeof(struct gdc_crop_param));
 				index = GET_GDC_IDX(ctx->crop_param->buf_index);
-				/* Check if out of crop_param array */
-				if (index >= GDC_MAX_BUFS) {
-					dev_err(gdc->dev, "Invalid buf_index %d, maximum is (%d)\n",
-						index, GDC_MAX_BUFS);
-					index = GET_GDC_IDX(ctx->crop_param->buf_index % (GDC_MAX_BUFS - 1));
+				/* Adjust buf_index if out of crop_param array */
+				if (ctx->crop_param->buf_index >= GDC_MAX_BUFS) {
+					dev_err(gdc->dev, "adjust buf_index(%d) to index(%d)\n",
+						ctx->crop_param->buf_index, ctx->crop_param->buf_index % GDC_MAX_BUFS);
+					ctx->crop_param->buf_index = ctx->crop_param->buf_index % GDC_MAX_BUFS;
 				}
 				/*
 				 * Copy memory to keep the data for multi-buffer
@@ -1288,7 +1288,7 @@ static int gdc_open(struct file *file)
 	struct gdc_ctx *ctx;
 	int ret = 0;
 
-	ctx = vmalloc(sizeof(struct gdc_ctx));
+	ctx = pablo_malloc(sizeof(struct gdc_ctx), GFP_KERNEL);
 
 	if (!ctx) {
 		dev_err(gdc->dev, "no memory for open context\n");
@@ -1363,7 +1363,7 @@ err_pclk_prepare:
 	atomic_dec(&gdc->m2m.in_use);
 	gdc_free_pmio_mem(gdc);
 err_alloc_pmio_mem:
-	vfree(ctx);
+	pablo_free(ctx);
 
 	return ret;
 }
@@ -1425,7 +1425,7 @@ static int gdc_release(struct file *file)
 		clk_unprepare(gdc->pclk);
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
-	vfree(ctx);
+	pablo_free(ctx);
 
 	gdc_info("X\n");
 
@@ -2411,7 +2411,8 @@ static int gdc_pmio_init(struct gdc_dev *gdc)
 
 	}
 
-	gdc->pmio_reg_seqs = vzalloc(sizeof(struct pmio_reg_seq) * camerapp_hw_gdc_g_reg_cnt());
+	gdc->pmio_reg_seqs = pablo_zalloc(sizeof(struct pmio_reg_seq) * camerapp_hw_gdc_g_reg_cnt(),
+						GFP_KERNEL);
 	if (!gdc->pmio_reg_seqs) {
 		dev_err(gdc->dev, "failed to alloc gdc PMIO multiple write buffer");
 		pmio_field_bulk_free(gdc->pmio, gdc->pmio_fields);
@@ -2425,7 +2426,7 @@ static int gdc_pmio_init(struct gdc_dev *gdc)
 static void gdc_pmio_exit(struct gdc_dev *gdc)
 {
 	if (gdc->pmio_reg_seqs)
-		vfree(gdc->pmio_reg_seqs);
+		pablo_free(gdc->pmio_reg_seqs);
 
 	if (gdc->pmio) {
 		if (gdc->pmio_fields)

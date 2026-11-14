@@ -17,6 +17,7 @@
 #include <linux/iommu.h>
 #include <linux/dma-mapping.h>
 #include <linux/delay.h>
+#include "pablo-mem.h"
 
 #include "pablo-icpu.h"
 #include "pablo-icpu-mem-wrapper.h"
@@ -100,7 +101,7 @@ static int __cma_alloc(struct device *dev, struct icpu_buf *special_buf)
 		return -EINVAL;
 	}
 
-	buf = kzalloc(sizeof(struct icpu_cma_buf), GFP_KERNEL);
+	buf = pablo_zalloc(sizeof(struct icpu_cma_buf), GFP_KERNEL);
 	if (!buf) {
 		ICPU_ERR("Failed to allocate icpu_cma_buf");
 		return -ENOMEM;
@@ -129,9 +130,9 @@ static int __cma_alloc(struct device *dev, struct icpu_buf *special_buf)
 		goto err_buf_alloc;
 	}
 
-	buf->sgt = kmalloc(sizeof(struct sg_table), GFP_KERNEL);
+	buf->sgt = pablo_malloc(sizeof(struct sg_table), GFP_KERNEL);
 	if (!buf->sgt) {
-		ICPU_ERR("Failed to allocate with kmalloc");
+		ICPU_ERR("Failed to allocate with pablo_malloc");
 		goto err_cma_alloc;
 	}
 
@@ -163,12 +164,12 @@ static int __cma_alloc(struct device *dev, struct icpu_buf *special_buf)
 iommu_map_cma_fail:
 	sg_free_table(buf->sgt);
 err_sg_alloc:
-	kfree(buf->sgt);
+	pablo_free(buf->sgt);
 	buf->sgt = NULL;
 err_cma_alloc:
 	cma_release(buf->cma_area, fw_pages, nr_pages);
 err_buf_alloc:
-	kfree(buf);
+	pablo_free(buf);
 
 	return -ENOMEM;
 }
@@ -185,11 +186,11 @@ static void __cma_free(struct icpu_buf *buf)
 	iommu_unmap(iommu_get_domain_for_dev(rbuf->priv), rbuf->daddr, rbuf->map_size);
 
 	sg_free_table(rbuf->sgt);
-	kfree(rbuf->sgt);
+	pablo_free(rbuf->sgt);
 
 	cma_release(rbuf->cma_area, phys_to_page(rbuf->paddr),
 			(rbuf->size >> PAGE_SHIFT));
-	kfree(rbuf);
+	pablo_free(rbuf);
 }
 
 static void __cma_sync_for_device(struct icpu_buf *buf)
@@ -223,7 +224,7 @@ void *pablo_kunit_alloc_dummy_cma_buf(void)
 {
 	struct icpu_buf *buf;
 
-	buf = kzalloc(sizeof(struct icpu_buf), GFP_KERNEL);
+	buf = pablo_zalloc(sizeof(struct icpu_buf), GFP_KERNEL);
 	buf->type = 1;
 
 	__cma_alloc(&sync_dev, buf);

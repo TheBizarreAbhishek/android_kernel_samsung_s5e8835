@@ -146,7 +146,7 @@ static void pablo_binary_release_binary_kunit_test(struct kunit *test)
 
 	/* TC #2. With FS binary */
 	bin.fw = NULL;
-	bin.data = vmalloc(4);
+	bin.data = pablo_malloc(4, GFP_KERNEL);
 
 	release_binary(&bin);
 }

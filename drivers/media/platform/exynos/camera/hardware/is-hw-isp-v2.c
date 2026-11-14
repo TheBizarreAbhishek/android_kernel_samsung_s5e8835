@@ -1373,7 +1373,7 @@ static int __nocfi is_hw_isp_open(struct is_hw_ip *hw_ip, u32 instance)
 	frame_manager_probe(hw_ip->framemgr, hw_ip->id, "HWISP");
 	frame_manager_open(hw_ip->framemgr, IS_MAX_HW_FRAME);
 
-	hw_ip->priv_info = vzalloc(sizeof(struct is_hw_isp));
+	hw_ip->priv_info = pablo_zalloc(sizeof(struct is_hw_isp), GFP_KERNEL);
 	if (!hw_ip->priv_info) {
 		mserr_hw("hw_ip->priv_info(null)", instance, hw_ip);
 		ret = -ENOMEM;
@@ -1393,7 +1393,7 @@ static int __nocfi is_hw_isp_open(struct is_hw_ip *hw_ip, u32 instance)
 
 		/* init iq_set */
 		for (i = 0; i < IS_STREAM_COUNT; i++) {
-			hw_isp->iq_set[i][reg_idx].regs = vzalloc(sizeof(struct cr_set) * reg_cnt);
+			hw_isp->iq_set[i][reg_idx].regs = pablo_zalloc(sizeof(struct cr_set) * reg_cnt, GFP_KERNEL);
 			if (!hw_isp->iq_set[i][reg_idx].regs) {
 				mserr_hw("failed to alloc iq_set.regs", instance, hw_ip);
 				ret = -ENOMEM;
@@ -1407,7 +1407,7 @@ static int __nocfi is_hw_isp_open(struct is_hw_ip *hw_ip, u32 instance)
 		/* init cur_hw_iq_set */
 		for (i = 0; i < COREX_MAX; i++) {
 			hw_isp->cur_hw_iq_set[i][reg_idx].regs =
-				vzalloc(sizeof(struct cr_set) * reg_cnt);
+				pablo_zalloc(sizeof(struct cr_set) * reg_cnt, GFP_KERNEL);
 			if (!hw_isp->cur_hw_iq_set[i][reg_idx].regs) {
 				mserr_hw("failed to alloc cur_hw_iq_set regs", instance, hw_ip);
 				ret = -ENOMEM;
@@ -1432,19 +1432,19 @@ err_regs_alloc:
 	for (reg_idx = ISP_REG_ITP; reg_idx < ISP_REG_MAX; reg_idx++) {
 		for (i = 0; i < IS_STREAM_COUNT; i++) {
 			if (hw_isp->iq_set[i][reg_idx].regs) {
-				vfree(hw_isp->iq_set[i][reg_idx].regs);
+				pablo_free(hw_isp->iq_set[i][reg_idx].regs);
 				hw_isp->iq_set[i][reg_idx].regs = NULL;
 			}
 		}
 		for (i = 0; i < COREX_MAX; i++) {
 			if (hw_isp->cur_hw_iq_set[i][reg_idx].regs) {
-				vfree(hw_isp->cur_hw_iq_set[i][reg_idx].regs);
+				pablo_free(hw_isp->cur_hw_iq_set[i][reg_idx].regs);
 				hw_isp->cur_hw_iq_set[i][reg_idx].regs = NULL;
 			}
 		}
 	}
 err_chain_create:
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 err_alloc:
 	frame_manager_close(hw_ip->framemgr);
@@ -1543,18 +1543,18 @@ static int is_hw_isp_close(struct is_hw_ip *hw_ip, u32 instance)
 	for (reg_idx = ISP_REG_ITP; reg_idx < ISP_REG_MAX; reg_idx++) {
 		for (i = 0; i < IS_STREAM_COUNT; i++) {
 			if (hw_isp->iq_set[i][reg_idx].regs) {
-				vfree(hw_isp->iq_set[i][reg_idx].regs);
+				pablo_free(hw_isp->iq_set[i][reg_idx].regs);
 				hw_isp->iq_set[i][reg_idx].regs = NULL;
 			}
 		}
 		for (i = 0; i < COREX_MAX; i++) {
 			if (hw_isp->cur_hw_iq_set[i][reg_idx].regs) {
-				vfree(hw_isp->cur_hw_iq_set[i][reg_idx].regs);
+				pablo_free(hw_isp->cur_hw_iq_set[i][reg_idx].regs);
 				hw_isp->cur_hw_iq_set[i][reg_idx].regs = NULL;
 			}
 		}
 	}
-	vfree(hw_isp);
+	pablo_free(hw_isp);
 	hw_ip->priv_info = NULL;
 
 	frame_manager_close(hw_ip->framemgr);

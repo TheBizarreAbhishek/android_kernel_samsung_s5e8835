@@ -119,5 +119,4 @@ struct size_cr_set {
 #ifndef MAX
 #define MAX(a, b)	(((a) > (b)) ? (a) : (b))
 #endif
-
 #endif

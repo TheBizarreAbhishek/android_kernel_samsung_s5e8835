@@ -421,7 +421,10 @@ inline void npu_log_hwdev_set_data(int hid)
 
 	if (hid) {
 		hwdev = npu_get_hdev_by_id(hid);
-
+		if (!hwdev) {
+			npu_err("fail in npu_get_hdev_by_id\n");
+			return;
+		}
 		/* HW device */
 		npu_log_hwdev.hid = hwdev->id;
 		npu_log_hwdev.status = hwdev->status;

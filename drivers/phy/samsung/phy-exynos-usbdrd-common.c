@@ -176,6 +176,8 @@ int exynos_usbdrd_phy_set_common(struct exynos_usbdrd_phy *phy_drd,
 			ret = abox_wait_boot_timeout(abox_dev, nsecs_to_jiffies(100000000UL));
 			if (ret < 0)
 				dev_err(abox_dev, "failed to abox_wait_boot_timeout\n");
+		} else if (submode == 2) {
+			abox_request_power_autosuspend(abox_dev, 0x7008, "USBOPEN");
 		} else {
 			abox_release_power(abox_dev, 0x7007, "TFA9874");
 		}

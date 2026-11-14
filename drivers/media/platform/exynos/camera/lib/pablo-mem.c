@@ -142,7 +142,7 @@ static void is_free_work(struct work_struct *w)
 	struct llist_node *t, *llnode;
 
 	llist_for_each_safe(llnode, t, llist_del_all(&p->list))
-		vfree((void *)llnode);
+		pablo_free((void *)llnode);
 }
 
 /* is vb2 buffer operations */
@@ -438,7 +438,7 @@ static long is_dbufcon_prepare(struct is_vb2_buf *vbuf, struct device *dev)
 	struct vb2_buffer *vb = &vbuf->vb.vb2_buf;
 	unsigned int num_i_planes = vb->num_planes - NUM_OF_META_PLANE;
 	struct dma_buf *dbufcon;
-	int count;
+	int count[IS_MAX_PLANES] = { 0, };
 	int p, b, i;
 	long ret;
 
@@ -451,21 +451,21 @@ static long is_dbufcon_prepare(struct is_vb2_buf *vbuf, struct device *dev)
 			goto err_get_dbufcon;
 		}
 
-		count = CALL_DMABUF_CON_OPS(vbuf, get_count, dbufcon);
-		if (count < 0) {
+		count[p] = CALL_DMABUF_CON_OPS(vbuf, get_count, dbufcon);
+		if (count[p] < 0) {
 			ret = 0;
 			goto err_get_count;
-		} else if (count == 0) {
+		} else if (count[p] == 0) {
 			err("empty dmabuf-container of fd: %d", vb->planes[p].m.fd);
 			ret = -EINVAL;
 			goto err_empty_dbufcon;
 		}
 
 		/* IS_MAX_PLANES includes meta-planes */
-		if (((count * num_i_planes) + NUM_OF_META_PLANE)
+		if (((count[p] * num_i_planes) + NUM_OF_META_PLANE)
 			> IS_MAX_PLANES) {
 			err("out of range plane. require: %d > supported: %d",
-				(count * num_i_planes) + NUM_OF_META_PLANE,
+				(count[p] * num_i_planes) + NUM_OF_META_PLANE,
 				IS_MAX_PLANES);
 			ret = -EINVAL;
 			goto err_too_many_planes;
@@ -473,7 +473,7 @@ static long is_dbufcon_prepare(struct is_vb2_buf *vbuf, struct device *dev)
 		}
 
 		/* change the order of each plane by the order of buffer */
-		for (b = 0, i = p; b < count; b++, i = (b * num_i_planes) + p) {
+		for (b = 0, i = p; b < count[p]; b++, i = (b * num_i_planes) + p) {
 			vbuf->dbuf[i] = CALL_DMABUF_CON_OPS(vbuf, get_buffer, dbufcon, b);
 			if (IS_ERR_OR_NULL(vbuf->dbuf[i])) {
 				err("failed to get dmabuf-container's dmabuf: %d", b);
@@ -499,7 +499,7 @@ static long is_dbufcon_prepare(struct is_vb2_buf *vbuf, struct device *dev)
 		CALL_DMABUF_OPS(vbuf, put, dbufcon);
 	}
 
-	vbuf->num_merged_dbufs = count;
+	vbuf->num_merged_dbufs = count[0];
 
 	atomic_inc(&stats.cnt_dbuf_prepare);
 
@@ -535,10 +535,9 @@ err_get_dbufcon:
 
 	while (p-- > 0) {
 		dbufcon = CALL_DMABUF_OPS(vbuf, get, vb->planes[p].m.fd);
-		count = CALL_DMABUF_CON_OPS(vbuf, get_count, dbufcon);
 		CALL_DMABUF_OPS(vbuf, put, dbufcon);
 
-		for (b = 0, i = p; b < count; b++, i = (b * num_i_planes) + p) {
+		for (b = 0, i = p; b < count[p]; b++, i = (b * num_i_planes) + p) {
 			CALL_DMABUF_OPS(vbuf, unmap_attachment, vbuf->atch[i], vbuf->sgt[i], DMA_BIDIRECTIONAL);
 			CALL_DMABUF_OPS(vbuf, detach, vbuf->dbuf[i], vbuf->atch[i]);
 			CALL_DMABUF_OPS(vbuf, put, vbuf->dbuf[i]);
@@ -831,7 +830,7 @@ void is_subbuf_prepare(struct is_sub_dma_buf *buf, struct v4l2_plane *plane,
 		struct device *dev)
 {
 	struct dma_buf *dbuf;
-	int cnt = 0;
+	int cnt[IS_MAX_PLANES] = { 0, };
 	u32 num_p = buf->num_plane;
 	u32 p, b, i;
 	bool is_dbufcon = true;
@@ -845,24 +844,24 @@ void is_subbuf_prepare(struct is_sub_dma_buf *buf, struct v4l2_plane *plane,
 			goto err_get_dbufcon;
 		}
 
-		cnt = CALL_DMABUF_CON_OPS(buf, get_count, dbuf);
-		if (cnt < 0) {
+		cnt[p] = CALL_DMABUF_CON_OPS(buf, get_count, dbuf);
+		if (cnt[p] < 0) {
 			is_dbufcon = false;
-			cnt = 1;
-		} else if (cnt == 0) {
+			cnt[p] = 1;
+		} else if (cnt[p] == 0) {
 			err("[V%d][P%d]Empty dma_buf_container. fd %d",
 				buf->vid, p, plane[p].m.fd);
 			goto err_get_dbuf;
 		}
 
-		if ((cnt * num_p) > IS_MAX_PLANES) {
+		if ((cnt[p] * num_p) > IS_MAX_PLANES) {
 			err("[V%d][P%d]Out of range plane. required %d > supported %d",
 				buf->vid, p,
-				(cnt * num_p), IS_MAX_PLANES);
+				(cnt[p] * num_p), IS_MAX_PLANES);
 			goto err_get_dbuf;
 		}
 
-		for (b = 0, i = p; b < cnt; b++, i = (num_p * b) + p) {
+		for (b = 0, i = p; b < cnt[p]; b++, i = (num_p * b) + p) {
 			if (IS_ENABLED(DMABUF_CONTAINER) && is_dbufcon)
 				buf->dbuf[i] = CALL_DMABUF_CON_OPS(buf, get_buffer, dbuf, b);
 			else
@@ -904,7 +903,7 @@ void is_subbuf_prepare(struct is_sub_dma_buf *buf, struct v4l2_plane *plane,
 		CALL_DMABUF_OPS(buf, put, dbuf);
 	}
 
-	buf->num_buffer = cnt;
+	buf->num_buffer = cnt[0];
 
 	atomic_inc(&stats.cnt_subbuf_prepare);
 
@@ -917,7 +916,7 @@ err_get_dbufcon:
 	buf->num_buffer = 0;
 
 	while (p-- > 0) {
-		for (b = 0, i = p; b < cnt; b++, i = (b * num_p) + p) {
+		for (b = 0, i = p; b < cnt[p]; b++, i = (b * num_p) + p) {
 			CALL_DMABUF_OPS(buf, unmap_attachment, buf->atch[i], buf->sgt[i], DMA_BIDIRECTIONAL);
 			CALL_DMABUF_OPS(buf, detach, buf->dbuf[i], buf->atch[i]);
 			CALL_DMABUF_OPS(buf, put, buf->dbuf[i]);
@@ -1138,7 +1137,7 @@ static void pablo_dma_buf_free(struct is_priv_buf *pbuf)
 #endif
 	atomic_sub(pbuf->aligned_size, &mem_stats_sz_active);
 
-	vfree(pbuf);
+	pablo_free(pbuf);
 }
 
 static ulong pablo_dma_buf_kvaddr(struct is_priv_buf *pbuf)
@@ -1304,7 +1303,7 @@ static void *is_ion_init(struct platform_device *pdev)
 	struct is_ion_ctx *ctx;
 	const char *heapname =
 		IS_ENABLED(CONFIG_ION_EXYNOS) ? "vendor_system_heap" : "ion_system_heap";
-	ctx = vzalloc(sizeof(*ctx));
+	ctx = pablo_zalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx)
 		return ERR_PTR(-ENOMEM);
 
@@ -1326,7 +1325,7 @@ static void is_ion_deinit(void *ctx)
 	struct is_ion_ctx *alloc_ctx = ctx;
 
 	mutex_destroy(&alloc_ctx->lock);
-	vfree(alloc_ctx);
+	pablo_free(alloc_ctx);
 }
 
 static struct is_priv_buf *is_ion_alloc(void *ctx,
@@ -1338,7 +1337,7 @@ static struct is_priv_buf *is_ion_alloc(void *ctx,
 	int ret = 0;
 	size_t aligned_size;
 
-	buf = vzalloc(sizeof(*buf));
+	buf = pablo_zalloc(sizeof(*buf), GFP_KERNEL);
 	if (!buf)
 		return ERR_PTR(-ENOMEM);
 
@@ -1391,7 +1390,7 @@ err_map_dmabuf:
 err_attach:
 	CALL_DMABUF_OPS(buf, put, buf->dma_buf);
 err_alloc:
-	vfree(buf);
+	pablo_free(buf);
 
 	pr_err("%s: Error occurred while allocating\n", __func__);
 	return ERR_PTR(ret);
@@ -1447,7 +1446,7 @@ static void *pablo_dmabuf_heap_init(struct platform_device *pdev)
 {
 	struct pablo_dmabuf_heap_ctx *pdhc;
 
-	pdhc = vzalloc(sizeof(*pdhc));
+	pdhc = pablo_zalloc(sizeof(*pdhc), GFP_KERNEL);
 	if (!pdhc)
 		return ERR_PTR(-ENOMEM);
 
@@ -1492,7 +1491,7 @@ static void pablo_dmabuf_heap_cleanup(void *ctx)
 		dma_heap_put(pdhc->dh_camera_uncached);
 #endif
 
-	vfree(pdhc);
+	pablo_free(pdhc);
 }
 
 static struct dma_heap *pablo_dmabuf_heap_find(void *ctx, const char *heapname)
@@ -1524,7 +1523,7 @@ static struct is_priv_buf *pablo_dmabuf_heap_alloc(void *ctx,
 	int ret;
 	size_t aligned_size;
 
-	buf = vzalloc(sizeof(*buf));
+	buf = pablo_zalloc(sizeof(*buf), GFP_KERNEL);
 	if (!buf)
 		return ERR_PTR(-ENOMEM);
 
@@ -1607,7 +1606,7 @@ err_map_dmabuf:
 err_attach:
 	CALL_DMABUF_OPS(buf, put, buf->dma_buf);
 err_alloc:
-	vfree(buf);
+	pablo_free(buf);
 
 	pr_err("%s: Error occurred while allocating\n", __func__);
 	return ERR_PTR(ret);
@@ -1625,10 +1624,10 @@ const struct is_mem_ops pablo_mem_ops_dmabuf_heap = { NULL, };
 /* pablo private buffer operations for 'contig mem' */
 static void pablo_contig_free(struct is_priv_buf *pbuf)
 {
-	kfree(pbuf->kvaddr);
+	pablo_free(pbuf->kvaddr);
 	pbuf->kvaddr = NULL;
 
-	kfree(pbuf);
+	pablo_free(pbuf);
 	pbuf = NULL;
 }
 
@@ -1658,13 +1657,13 @@ static struct is_priv_buf *pablo_contig_alloc(size_t size)
 {
 	struct is_priv_buf *buf;
 
-	buf = kzalloc(sizeof(*buf), GFP_KERNEL);
+	buf = pablo_zalloc(sizeof(*buf), GFP_KERNEL);
 	if (!buf)
 		return ERR_PTR(-ENOMEM);
 
-	buf->kvaddr = kzalloc(size, GFP_KERNEL);
+	buf->kvaddr = pablo_zalloc(size, GFP_KERNEL);
 	if (!buf->kvaddr) {
-		kfree(buf);
+		pablo_free(buf);
 		return ERR_PTR(-ENOMEM);
 	}
 

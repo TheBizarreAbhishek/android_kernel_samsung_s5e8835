@@ -1754,8 +1754,18 @@ static struct npu_memory_buffer *
 copy_ncp_header(struct npu_session *session, struct npu_memory_buffer *ncp_mem_buf)
 {
 	struct npu_memory_buffer *buffer;
-	struct ncp_header *src_hdr = ncp_mem_buf->vaddr + session->ncp_mem_buf_offset;
+	struct ncp_header *src_hdr = NULL;
 
+	if (!session || !ncp_mem_buf) {
+		npu_err("invalid session or ncp_mem_buf\n");
+		return ERR_PTR(-EINVAL);
+	}
+
+        if (session->ncp_mem_buf_offset > ncp_mem_buf->size) {
+		npu_err("fail in copy_ncp_header out-of-bound\n");
+                return ERR_PTR(-EINVAL);
+        }
+	src_hdr = ncp_mem_buf->vaddr + session->ncp_mem_buf_offset;
 	buffer = npu_memory_copy(session->memory, ncp_mem_buf,
 				session->ncp_mem_buf_offset, src_hdr->hdr_size);
 	if (IS_ERR_OR_NULL(buffer))
@@ -2143,7 +2153,7 @@ int __second_parsing_ncp(
 				weight_size = (av + address_vector_index)->size;
 				if (unlikely((weight_offset + weight_size) < weight_size)) {
 					npu_err("weight_offset(0x%x) + weight size (0x%x) seems to be overflow.\n",
-						weight_offset, weight_size);
+							weight_offset, weight_size);
 					return -ERANGE;
 				}
 				if (unlikely((weight_offset + weight_size) > (u32)session->ncp_mem_buf->size)) {

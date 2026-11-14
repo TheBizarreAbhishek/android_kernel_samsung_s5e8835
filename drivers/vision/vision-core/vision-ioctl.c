@@ -561,7 +561,8 @@ get_vs4l_profiler_node_child(struct vs4l_profiler *kp, bool chk_compat)
 	return ret;
 p_err_profiler_child2:
 	for (i = 0; i < done_cnt; i++)
-		kfree(child[i]);
+		if (!IS_ERR_OR_NULL(child[i]))
+			kfree(child[i]);
 
 p_err_profiler_child1:
 	kfree(child);
@@ -576,7 +577,7 @@ get_vs4l_profiler_node(struct vs4l_profiler *kp, bool chk_compat)
 	struct vs4l_profiler_node *node = NULL;
 
 	node = copy_from_usr_vs4l((void __user *)kp->node,
-				  sizeof(*node), "profiler_node");
+				  sizeof(struct vs4l_profiler_node), "profiler_node");
 
 	if (IS_ERR(node)) {
 		ret = (int) PTR_ERR(node);
@@ -595,7 +596,8 @@ get_vs4l_profiler_node(struct vs4l_profiler *kp, bool chk_compat)
 	}
 	return ret;
 p_err_profiler_node:
-	kfree(node);
+	if (!IS_ERR_OR_NULL(node))
+		kfree(node);
 	kp->node = NULL;
 	return ret;
 }
