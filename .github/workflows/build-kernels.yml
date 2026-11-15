@@ -499,7 +499,7 @@ jobs:
 
                   # Package updated vendor modules (Mali r54p3 & xHCI USB DAC fix)
                   mkdir -p "$HOME/AnyKernel3/modules"
-                  find "$GITHUB_WORKSPACE/out" \( -name "mali_kbase*.ko" -o -name "xhci_exynos*.ko" -o -name "dwc3_exynos_usb*.ko" \) -print -exec cp {} "$HOME/AnyKernel3/modules/" \;
+                  find "$GITHUB_WORKSPACE/out" \( -name "*mali_kbase*.ko" -o -name "*xhci*exynos*.ko" -o -name "*dwc3*exynos*.ko" \) -print -exec cp {} "$HOME/AnyKernel3/modules/" \;
                   "${{ env.TOOLCHAIN_DIR }}/bin/llvm-strip" --strip-debug "$HOME/AnyKernel3/modules/"*.ko 2>/dev/null || true
 
                   # Disable default AK3 modules handler and inject native KernelSU/Magisk module installer
