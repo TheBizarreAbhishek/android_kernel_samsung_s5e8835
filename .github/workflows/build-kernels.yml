@@ -584,6 +584,7 @@ jobs:
                   echo "ZIP_SIZE=$ZIP_SIZE" >> "$GITHUB_ENV"
 
             - name: Package NetHunter Wireless Drivers Magisk Module
+              continue-on-error: true
               run: |
                   set -euo pipefail
                   echo "📦 Preparing NetHunter Wireless Magisk Module..."
@@ -597,13 +598,13 @@ jobs:
                   "${{ env.TOOLCHAIN_DIR }}/bin/llvm-strip" --strip-debug "$NH_DIR/system/lib/modules/"*.ko 2>/dev/null || true
 
                   echo "⬇️ Downloading NetHunter Wi-Fi firmware blobs from kernel.org..."
-                  curl -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath9k_htc/htc_9271-1.4.0.fw" -o "$NH_DIR/system/etc/firmware/htc_9271-1.4.0.fw"
-                  cp "$NH_DIR/system/etc/firmware/htc_9271-1.4.0.fw" "$NH_DIR/system/etc/firmware/htc_9271.fw"
+                  curl --connect-timeout 10 --max-time 30 --retry 2 -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath9k_htc/htc_9271-1.4.0.fw" -o "$NH_DIR/system/etc/firmware/htc_9271-1.4.0.fw" || true
+                  [ -f "$NH_DIR/system/etc/firmware/htc_9271-1.4.0.fw" ] && cp -f "$NH_DIR/system/etc/firmware/htc_9271-1.4.0.fw" "$NH_DIR/system/etc/firmware/htc_9271.fw" || true
 
-                  curl -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath9k_htc/htc_7010-1.4.0.fw" -o "$NH_DIR/system/etc/firmware/htc_7010-1.4.0.fw"
-                  cp "$NH_DIR/system/etc/firmware/htc_7010-1.4.0.fw" "$NH_DIR/system/etc/firmware/htc_7010.fw"
+                  curl --connect-timeout 10 --max-time 30 --retry 2 -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath9k_htc/htc_7010-1.4.0.fw" -o "$NH_DIR/system/etc/firmware/htc_7010-1.4.0.fw" || true
+                  [ -f "$NH_DIR/system/etc/firmware/htc_7010-1.4.0.fw" ] && cp -f "$NH_DIR/system/etc/firmware/htc_7010-1.4.0.fw" "$NH_DIR/system/etc/firmware/htc_7010.fw" || true
 
-                  curl -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/rt2870.bin" -o "$NH_DIR/system/etc/firmware/rt2870.bin"
+                  curl --connect-timeout 10 --max-time 30 --retry 2 -LSs "https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/rt2870.bin" -o "$NH_DIR/system/etc/firmware/rt2870.bin" || true
 
                   echo "📝 Creating module.prop..."
                   printf '%s\n' \
