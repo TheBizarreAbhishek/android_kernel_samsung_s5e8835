@@ -702,10 +702,22 @@ jobs:
                   echo "✂️ Stripping unused OpenCL bloat (~35MB) for s5e8835..."
                   rm -rf "$MODULE_TMP/pkg/compat_opencl"
 
+                  echo "📦 Bundling updated kernel modules (Mali r54p3 & USB DAC fix) into GPU driver module..."
+                  mkdir -p "$MODULE_TMP/pkg/system/vendor/lib/modules"
+                  mkdir -p "$MODULE_TMP/pkg/system/vendor_dlkm/lib/modules"
+                  mkdir -p "$MODULE_TMP/ko_temp"
+                  KM_ZIP_FOUND=$(find /home/runner/release -name "Bizarre-Kernel-Modules-*.zip" | head -1 || true)
+                  if [[ -n "$KM_ZIP_FOUND" ]]; then
+                      unzip -q -j "$KM_ZIP_FOUND" "*.ko" -d "$MODULE_TMP/ko_temp" || true
+                      cp -f "$MODULE_TMP/ko_temp/"*.ko "$MODULE_TMP/pkg/system/vendor/lib/modules/" 2>/dev/null || true
+                      cp -f "$MODULE_TMP/ko_temp/"*.ko "$MODULE_TMP/pkg/system/vendor_dlkm/lib/modules/" 2>/dev/null || true
+                      rm -rf "$MODULE_TMP/ko_temp"
+                  fi
+
                   echo "✍️ Setting author and name in module.prop..."
                   sed -i 's/^author=.*/author=Abhishek Babu/g' "$MODULE_TMP/pkg/module.prop"
                   sed -i 's/^name=.*/name=Bizarre Exynos Valhall GPU Driver [r54p1] (s5e8835 \/ Exynos 1380)/g' "$MODULE_TMP/pkg/module.prop"
-                  sed -i 's/^description=.*/description=Bizarre Mali Valhall GPU driver (r54p1 userspace) for Exynos 1380 (Mali-G68 MP5). Requires Bizarre Kernel r54p3 KMD./g' "$MODULE_TMP/pkg/module.prop"
+                  sed -i 's/^description=.*/description=Bizarre Mali Valhall GPU driver (r54p1 userspace + r54p3 KMD) and USB DAC crash fix for Exynos 1380 (s5e8835)./g' "$MODULE_TMP/pkg/module.prop"
 
                   echo "--- module.prop ---"
                   cat "$MODULE_TMP/pkg/module.prop"
