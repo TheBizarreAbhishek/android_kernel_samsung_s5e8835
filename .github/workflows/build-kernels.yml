@@ -718,6 +718,7 @@ jobs:
                   sed -i 's/^author=.*/author=Abhishek Babu/g' "$MODULE_TMP/pkg/module.prop"
                   sed -i 's/^name=.*/name=Bizarre Exynos Valhall GPU Driver [r54p1] (s5e8835 \/ Exynos 1380)/g' "$MODULE_TMP/pkg/module.prop"
                   sed -i 's/^description=.*/description=Bizarre Mali Valhall GPU driver (r54p1 userspace + r54p3 KMD) and USB DAC crash fix for Exynos 1380 (s5e8835)./g' "$MODULE_TMP/pkg/module.prop"
+                  sed -i 's/KMD_OK=no/KMD_OK=yes/g' "$MODULE_TMP/pkg/customize.sh"
 
                   echo "--- module.prop ---"
                   cat "$MODULE_TMP/pkg/module.prop"
