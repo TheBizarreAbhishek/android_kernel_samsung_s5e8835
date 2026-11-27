@@ -230,7 +230,7 @@ static void secdbg_softirq_pr_softirq_status(struct seq_file *dst)
 	int cpu;
 
 	secdbg_pr(dst, "softirq pending status ==================\n");
-	for (cpu = 0; cpu < CONFIG_VENDOR_NR_CPUS; cpu++) {
+	for_each_possible_cpu(cpu) {
 		unsigned int pending;
 
 		pending = *per_cpu_ptr(&irq_stat.__softirq_pending, cpu);

@@ -4149,7 +4149,6 @@ static int load_module(struct load_info *info, const char __user *uargs,
 		goto free_copy;
 	}
 
-#if (defined(CONFIG_ZRAM) && !defined(CONFIG_ZRAM_MODULE)) || defined(CONFIG_SEC_PANEL_NOTIFIER_V2)
 	/*
 	 * In Samsung GKI, vendor_boot's dlkm.cpio unconditionally modprobes
 	 * vendor modules during early first-stage init. When built into
@@ -4157,14 +4156,15 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	 * collisions and init panics with LOG(FATAL). Intercept and return 0
 	 * (success) so first-stage init continues cleanly.
 	 */
-	if (info->name && (!strcmp(info->name, "zram") ||
-			   !strcmp(info->name, "zsmalloc") ||
-			   !strcmp(info->name, "sec_panel_notifier_v2"))) {
+	if (info->name &&
+	    ((IS_BUILTIN(CONFIG_ZRAM) && !strcmp(info->name, "zram")) ||
+	     (IS_BUILTIN(CONFIG_ZSMALLOC) && !strcmp(info->name, "zsmalloc")) ||
+	     (IS_BUILTIN(CONFIG_SEC_PANEL_NOTIFIER_V2) &&
+	      !strcmp(info->name, "sec_panel_notifier_v2")))) {
 		pr_info("Bizarre Kernel: %s is built-in, skipping redundant DLKM load\n", info->name);
 		free_copy(info);
 		return 0;
 	}
-#endif
 
 	err = rewrite_section_headers(info, flags);
 	if (err)

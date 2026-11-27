@@ -1034,9 +1034,13 @@ void dbg_snapshot_init_log(void)
 		register_rwmmio_post_read(dbg_snapshot_reg_post_read, NULL);
 	}
 
-	dss_freq_size = of_property_count_strings(np, "freq_names");
+	/* a missing freq_names (-EINVAL) must not become a huge unsigned count */
+	dss_freq_size = clamp_t(int, of_property_count_strings(np, "freq_names"),
+				0, ARRAY_SIZE(dss_freq_name));
 	of_property_for_each_string(np, "freq_names", prop, str) {
-		strncpy(dss_freq_name[i++], str, strlen(str));
+		if (i >= dss_freq_size)
+			break;
+		strscpy(dss_freq_name[i++], str, sizeof(dss_freq_name[0]));
 	}
 
 	dbg_snapshot_log_output();
