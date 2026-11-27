@@ -8358,9 +8358,9 @@
 
 				mfc_d_qos_variant_2 {
 					thrd_mb = <0x116cf4>;
-					freq_mfc = <0x514c8>;
-					freq_int = <0x20788>;
-					freq_mif = <0xa50a0>;
+					freq_mfc = <0xa2990>;
+					freq_int = <0xa2990>;
+					freq_mif = <0x1fefc8>;
 					bts_scen = "default";
 					time_fw = <0x211>;
 				};
@@ -8388,9 +8388,9 @@
 
 				mfc_e_qos_variant_2 {
 					thrd_mb = <0x116cf4>;
-					freq_mfc = <0x514c8>;
-					freq_int = <0x20788>;
-					freq_mif = <0xa50a0>;
+					freq_mfc = <0xa2990>;
+					freq_int = <0xa2990>;
+					freq_mif = <0x1fefc8>;
 					bts_scen = "default";
 					time_fw = <0x211>;
 				};

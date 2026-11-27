@@ -25,6 +25,9 @@
 #define OC_DSU_MAX_KHZ		1898000U
 #define OC_GPU_MAX_KHZ		1053000U
 #define OC_MIF_SAFE_MAX_KHZ	2093000U
+#define OC_MFC_MAX_KHZ		666000U
+#define OC_INT_MAX_KHZ		666000U
+#define OC_MFC_HIGH_THRD_MB	1000000U
 #define OC_GPU_DEFAULT_LIT_MIN	1069000U
 #define OC_GPU_COLS		8U
 #define OC_GPU_MAX_ROWS		32U
@@ -239,6 +242,176 @@ static void __init oc_tune_ufcc_dt(void)
 	of_node_put(ufcc_np);
 }
 
+static int __init oc_update_dt_str(struct device_node *np, const char *name,
+				    const char *val)
+{
+	struct property *prop;
+	int ret;
+
+	prop = kzalloc(sizeof(*prop), GFP_KERNEL);
+	if (!prop)
+		return -ENOMEM;
+
+	prop->name = kstrdup(name, GFP_KERNEL);
+	prop->value = kstrdup(val, GFP_KERNEL);
+	if (!prop->name || !prop->value) {
+		kfree(prop->name);
+		kfree(prop->value);
+		kfree(prop);
+		return -ENOMEM;
+	}
+	prop->length = strlen(val) + 1;
+
+	ret = of_update_property(np, prop);
+	if (ret) {
+		kfree(prop->name);
+		kfree(prop->value);
+		kfree(prop);
+	}
+	return ret;
+}
+
+static void __init oc_patch_mfc_variant(struct device_node *mfc_np,
+					const char *table_name,
+					const char *variant_name)
+{
+	static const struct {
+		const char *prop;
+		u32 target;
+	} mfc_props[] = {
+		{ "freq_mfc", OC_MFC_MAX_KHZ },
+		{ "freq_int", OC_INT_MAX_KHZ },
+		{ "freq_mif", OC_MIF_SAFE_MAX_KHZ },
+	};
+	struct device_node *tbl_np, *var_np;
+	u32 thrd = 0, cur = 0;
+	unsigned int i;
+	bool changed = false;
+
+	tbl_np = of_get_child_by_name(mfc_np, table_name);
+	var_np = tbl_np ? of_get_child_by_name(tbl_np, variant_name) : NULL;
+	if (!var_np)
+		goto out;
+
+	if (of_property_read_u32(var_np, "thrd_mb", &thrd) ||
+	    thrd < OC_MFC_HIGH_THRD_MB)
+		goto out;
+
+	for (i = 0; i < ARRAY_SIZE(mfc_props); i++) {
+		u32 val = mfc_props[i].target;
+
+		if (of_property_read_u32(var_np, mfc_props[i].prop, &cur))
+			continue;
+		if (cur < val &&
+		    !oc_update_dt_u32_array(var_np, mfc_props[i].prop, &val, 1))
+			changed = true;
+	}
+
+	if (changed)
+		pr_info("exynos_oc_tune: raised %s/%s to MFC=%u INT=%u MIF=%u kHz\n",
+			table_name, variant_name, OC_MFC_MAX_KHZ,
+			OC_INT_MAX_KHZ, OC_MIF_SAFE_MAX_KHZ);
+
+out:
+	of_node_put(var_np);
+	of_node_put(tbl_np);
+}
+
+/* Ensure 4K60/high-MB MFC encode & decode use 666 MHz MFC/INT and 2093 MHz MIF. */
+static void __init oc_tune_mfc_dt(void)
+{
+	static const char * const targets[][2] = {
+		{ "mfc_encoder_qos_table", "mfc_e_qos_variant_2" },
+		{ "mfc_default_qos_table", "mfc_d_qos_variant_2" },
+	};
+	struct device_node *mfc_np;
+	unsigned int i;
+
+	mfc_np = of_find_compatible_node(NULL, NULL, "samsung,exynos-mfc-core");
+	if (!mfc_np)
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(targets); i++)
+		oc_patch_mfc_variant(mfc_np, targets[i][0], targets[i][1]);
+
+	of_node_put(mfc_np);
+}
+
+/* Fallback in-memory is_dvfs FHD/UHD video scenario tuning in case DTBO lacks it. */
+static void __init oc_tune_is_dvfs_dt(void)
+{
+	static const char * const uhd60_prefixes[] = {
+		"rear_single_video_uhd60_",
+		"rear_single_video_uhd60_hf_",
+	};
+	static const char * const cpu_m2m_prefixes[] = {
+		"rear_single_video_fhd30_",
+		"rear_single_video_fhd60_",
+		"rear_single_video_uhd30_",
+		"rear_single_video_uhd60_",
+		"rear_single_video_uhd60_hf_",
+	};
+	static const struct {
+		const char *suffix;
+		u32 val;
+	} uhd60_specs[] = {
+		{ "cam", 0U },
+		{ "isp", 0U },
+		{ "m2m", 0U },
+		{ "mif", 0U },
+		{ "hpg", 6U },
+	};
+	struct device_node *is_np, *dvfs_np, *tbl_np;
+	unsigned int p, i;
+	bool changed = false;
+
+	is_np = of_find_compatible_node(NULL, NULL, "samsung,exynos-is");
+	dvfs_np = is_np ? of_get_child_by_name(is_np, "is_dvfs") : NULL;
+	tbl_np = dvfs_np ? of_get_child_by_name(dvfs_np, "table0") : NULL;
+	if (!tbl_np)
+		goto out;
+
+	for (p = 0; p < ARRAY_SIZE(uhd60_prefixes); p++) {
+		char prop_name[64];
+
+		for (i = 0; i < ARRAY_SIZE(uhd60_specs); i++) {
+			u32 val = uhd60_specs[i].val;
+
+			snprintf(prop_name, sizeof(prop_name), "%s%s",
+				 uhd60_prefixes[p], uhd60_specs[i].suffix);
+			if (of_find_property(tbl_np, prop_name, NULL))
+				continue;
+			if (!oc_update_dt_u32_array(tbl_np, prop_name, &val, 1))
+				changed = true;
+		}
+	}
+
+	for (p = 0; p < ARRAY_SIZE(cpu_m2m_prefixes); p++) {
+		char prop_name[64];
+		const char *cur_str = NULL;
+		u32 m2m_lv = 1U;
+
+		snprintf(prop_name, sizeof(prop_name), "%sm2m", cpu_m2m_prefixes[p]);
+		if (!of_find_property(tbl_np, prop_name, NULL) &&
+		    !oc_update_dt_u32_array(tbl_np, prop_name, &m2m_lv, 1))
+			changed = true;
+
+		snprintf(prop_name, sizeof(prop_name), "%scpu", cpu_m2m_prefixes[p]);
+		if ((of_property_read_string(tbl_np, prop_name, &cur_str) ||
+		     strcmp(cur_str, "0-3") == 0) &&
+		    !oc_update_dt_str(tbl_np, prop_name, "0-7"))
+			changed = true;
+	}
+
+	if (changed)
+		pr_info("exynos_oc_tune: applied FHD/UHD video is_dvfs tuning in DT\n");
+
+out:
+	of_node_put(tbl_np);
+	of_node_put(dvfs_np);
+	of_node_put(is_np);
+}
+
 static void oc_apply_cmupmucal_uv(struct module *mod)
 {
 	unsigned int i;
@@ -433,6 +606,8 @@ static int __init exynos_oc_tune_init(void)
 	oc_tune_gpu_dt();
 	oc_tune_fclamp_dt();
 	oc_tune_ufcc_dt();
+	oc_tune_mfc_dt();
+	oc_tune_is_dvfs_dt();
 
 	ret = register_module_notifier(&oc_module_nb);
 	if (ret)
