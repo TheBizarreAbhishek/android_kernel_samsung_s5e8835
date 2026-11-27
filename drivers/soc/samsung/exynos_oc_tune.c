@@ -337,19 +337,17 @@ static void __init oc_tune_mfc_dt(void)
 	of_node_put(mfc_np);
 }
 
-/* Fallback in-memory is_dvfs FHD/UHD video scenario tuning in case DTBO lacks it. */
+/* Upgrade all is_dvfs table0 *_cpu masks to 0-7 and ensure FHD/UHD M2M & UHD60 QoS. */
 static void __init oc_tune_is_dvfs_dt(void)
 {
 	static const char * const uhd60_prefixes[] = {
 		"rear_single_video_uhd60_",
 		"rear_single_video_uhd60_hf_",
 	};
-	static const char * const cpu_m2m_prefixes[] = {
+	static const char * const fhd_uhd30_prefixes[] = {
 		"rear_single_video_fhd30_",
 		"rear_single_video_fhd60_",
 		"rear_single_video_uhd30_",
-		"rear_single_video_uhd60_",
-		"rear_single_video_uhd60_hf_",
 	};
 	static const struct {
 		const char *suffix;
@@ -362,7 +360,9 @@ static void __init oc_tune_is_dvfs_dt(void)
 		{ "hpg", 6U },
 	};
 	struct device_node *is_np, *dvfs_np, *tbl_np;
-	unsigned int p, i;
+	struct property *pp;
+	const char *cpu_props[64];
+	unsigned int p, i, n_cpu = 0;
 	bool changed = false;
 
 	is_np = of_find_compatible_node(NULL, NULL, "samsung,exynos-is");
@@ -373,6 +373,7 @@ static void __init oc_tune_is_dvfs_dt(void)
 
 	for (p = 0; p < ARRAY_SIZE(uhd60_prefixes); p++) {
 		char prop_name[64];
+		const char *cur_str = NULL;
 
 		for (i = 0; i < ARRAY_SIZE(uhd60_specs); i++) {
 			u32 val = uhd60_specs[i].val;
@@ -384,27 +385,42 @@ static void __init oc_tune_is_dvfs_dt(void)
 			if (!oc_update_dt_u32_array(tbl_np, prop_name, &val, 1))
 				changed = true;
 		}
-	}
 
-	for (p = 0; p < ARRAY_SIZE(cpu_m2m_prefixes); p++) {
-		char prop_name[64];
-		const char *cur_str = NULL;
-		u32 m2m_lv = 1U;
-
-		snprintf(prop_name, sizeof(prop_name), "%sm2m", cpu_m2m_prefixes[p]);
-		if (!of_find_property(tbl_np, prop_name, NULL) &&
-		    !oc_update_dt_u32_array(tbl_np, prop_name, &m2m_lv, 1))
-			changed = true;
-
-		snprintf(prop_name, sizeof(prop_name), "%scpu", cpu_m2m_prefixes[p]);
-		if ((of_property_read_string(tbl_np, prop_name, &cur_str) ||
-		     strcmp(cur_str, "0-3") == 0) &&
+		snprintf(prop_name, sizeof(prop_name), "%scpu", uhd60_prefixes[p]);
+		if (of_property_read_string(tbl_np, prop_name, &cur_str) &&
 		    !oc_update_dt_str(tbl_np, prop_name, "0-7"))
 			changed = true;
 	}
 
+	for (p = 0; p < ARRAY_SIZE(fhd_uhd30_prefixes); p++) {
+		char prop_name[64];
+		u32 m2m_lv = 1U;
+
+		snprintf(prop_name, sizeof(prop_name), "%sm2m", fhd_uhd30_prefixes[p]);
+		if (!of_find_property(tbl_np, prop_name, NULL) &&
+		    !oc_update_dt_u32_array(tbl_np, prop_name, &m2m_lv, 1))
+			changed = true;
+	}
+
+	/* Collect all *_cpu properties first so of_update_property cannot alias traversal. */
+	for_each_property_of_node(tbl_np, pp) {
+		size_t len;
+
+		if (!pp->name || n_cpu >= ARRAY_SIZE(cpu_props))
+			continue;
+		len = strlen(pp->name);
+		if (len < 4 || strcmp(pp->name + len - 4, "_cpu") != 0)
+			continue;
+		if (pp->value && strcmp((const char *)pp->value, "0-3") == 0)
+			cpu_props[n_cpu++] = pp->name;
+	}
+	for (i = 0; i < n_cpu; i++) {
+		if (!oc_update_dt_str(tbl_np, cpu_props[i], "0-7"))
+			changed = true;
+	}
+
 	if (changed)
-		pr_info("exynos_oc_tune: applied FHD/UHD video is_dvfs tuning in DT\n");
+		pr_info("exynos_oc_tune: applied all-core is_dvfs & UHD60/M2M tuning in DT\n");
 
 out:
 	of_node_put(tbl_np);
