@@ -91,3 +91,6 @@ obj-$(CONFIG_EXYNOS_PERF)       += xperf/
 
 # Profiler Multi IP Governor
 obj-$(CONFIG_EXYNOS_PROFILER)         += profiler/
+
+# Safe SRAM OC, -2% undervolt, and +5C thermal tuner
+obj-$(CONFIG_SOC_S5E8835)	+= exynos_oc_tune.o
