@@ -161,6 +161,84 @@ static void __init oc_tune_fclamp_dt(void)
 	}
 }
 
+static void __init oc_patch_ufcc_limit_table(struct device_node *limits_np,
+					     const char *child_name,
+					     bool is_min)
+{
+	static const u32 oc_freqs[] = {
+		OC_CPUCL1_MAX_KHZ, 2688000U, 2592000U, 2496000U
+	};
+	struct device_node *np;
+	u32 *buf;
+	int n, extra, new_n, i;
+
+	np = of_get_child_by_name(limits_np, child_name);
+	if (!np)
+		return;
+
+	n = of_property_count_u32_elems(np, "table");
+	if (n <= 0 || (n % 5) != 0 || n > 512)
+		goto out_put;
+
+	/* Inspect first element to avoid double-prepending if already patched. */
+	buf = kcalloc(n + ARRAY_SIZE(oc_freqs) * 5, sizeof(u32), GFP_KERNEL);
+	if (!buf)
+		goto out_put;
+
+	extra = ARRAY_SIZE(oc_freqs);
+	if (of_property_read_u32_array(np, "table", buf + extra * 5, n))
+		goto out_free;
+
+	if (buf[extra * 5] >= 2496000U) {
+		memmove(buf, buf + extra * 5, n * sizeof(u32));
+		extra = 0;
+	}
+
+	new_n = n + extra * 5;
+	for (i = 0; i < extra; i++) {
+		u32 *row = &buf[i * 5];
+
+		row[0] = oc_freqs[i];
+		row[1] = oc_freqs[i];
+		row[2] = OC_CPUCL0_MAX_KHZ;
+		row[3] = is_min ? 2U : 0U;
+		row[4] = is_min ? 1U : 0U;
+	}
+
+	/* Replace obsolete 2002 MHz LITTLE ceiling (snaps down to 1920 in max-limit). */
+	for (i = extra * 5; i < new_n; i += 5) {
+		if (buf[i + 2] == 2002000U)
+			buf[i + 2] = is_min ? 2016000U : OC_CPUCL0_MAX_KHZ;
+	}
+
+	oc_update_dt_u32_array(np, "table", buf, new_n);
+
+out_free:
+	kfree(buf);
+out_put:
+	of_node_put(np);
+}
+
+/* Unlock exynos-ufcc tables up to 2704/2210 MHz before exynos_ufcc.ko probes. */
+static void __init oc_tune_ufcc_dt(void)
+{
+	struct device_node *ufcc_np, *ufc_np, *limits_np;
+
+	ufcc_np = of_find_compatible_node(NULL, NULL, "samsung,exynos-ufcc");
+	if (!ufcc_np)
+		return;
+
+	ufc_np = of_get_child_by_name(ufcc_np, "ufc");
+	limits_np = ufc_np ? of_get_child_by_name(ufc_np, "limits") : NULL;
+	if (limits_np) {
+		oc_patch_ufcc_limit_table(limits_np, "max-limit", false);
+		oc_patch_ufcc_limit_table(limits_np, "min-limit", true);
+		of_node_put(limits_np);
+	}
+	of_node_put(ufc_np);
+	of_node_put(ufcc_np);
+}
+
 static void oc_apply_cmupmucal_uv(struct module *mod)
 {
 	unsigned int i;
@@ -279,11 +357,15 @@ static bool oc_bump_trip(struct thermal_zone_device *tz, int trip,
 static void oc_tune_thermal_zones(void)
 {
 	static const char * const zone_names[] = { "BIG", "LITTLE", "G3D" };
+	static bool zone_tuned[ARRAY_SIZE(zone_names)];
 	unsigned int i;
 
 	for (i = 0; i < ARRAY_SIZE(zone_names); i++) {
 		struct thermal_zone_device *tz;
 		bool changed = false;
+
+		if (zone_tuned[i])
+			continue;
 
 		tz = thermal_zone_get_zone_by_name(zone_names[i]);
 		if (IS_ERR(tz) || !tz->ops ||
@@ -294,7 +376,8 @@ static void oc_tune_thermal_zones(void)
 		changed |= oc_bump_trip(tz, 1, THERMAL_TRIP_ACTIVE,
 					60000, 77000, OC_SWITCH_ON_MAX_MC);
 		changed |= oc_bump_trip(tz, 2, THERMAL_TRIP_PASSIVE,
-					75000, 90000, OC_CONTROL_MAX_MC);
+					75000, 89000, OC_CONTROL_MAX_MC);
+		zone_tuned[i] = true;
 
 		if (changed) {
 			thermal_zone_device_update(tz, THERMAL_EVENT_UNSPECIFIED);
@@ -349,6 +432,7 @@ static int __init exynos_oc_tune_init(void)
 
 	oc_tune_gpu_dt();
 	oc_tune_fclamp_dt();
+	oc_tune_ufcc_dt();
 
 	ret = register_module_notifier(&oc_module_nb);
 	if (ret)
