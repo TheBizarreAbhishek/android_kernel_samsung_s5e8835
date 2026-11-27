@@ -31,6 +31,8 @@
 				sensor_maker = "SONY";
 				sensor_name = "IMX355";
 				setfile_name = "setfile_imx355.bin";
+				pinning_setfile;
+				preload_setfile;
 
 				status = "okay";
 

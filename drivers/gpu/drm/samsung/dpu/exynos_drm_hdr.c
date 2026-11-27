@@ -249,8 +249,10 @@ static int hdr_import_buffer(struct exynos_hdr *hdr,
 				DMA_BUF_MAP_INIT_VADDR(hdr->vaddr);
 
 			dma_buf_vunmap(hdr->dma_buf, &old_map);
+			hdr->vaddr = NULL;
 		}
 		dma_buf_put(hdr->dma_buf);
+		hdr->dma_buf = NULL;
 	}
 
 	ret = dma_buf_vmap(buf, &map);
@@ -274,17 +276,22 @@ error:
 	return -1;
 }
 
-static struct hdr_context *hdr_acquire_context(struct exynos_hdr *hdr, int size)
+static void *hdr_acquire_context(struct exynos_hdr *hdr, int size)
 {
 	int i, ctx_no;
 
-	for (i = 0; i < MAX_HDR_CONTEXT; i++) {
-		if (!hdr->ctx[i].data)
-			hdr->ctx[i].data = kzalloc(size, GFP_KERNEL);
+	if (hdr->ctx_size != size) {
+		for (i = 0; i < MAX_HDR_CONTEXT; i++) {
+			if (hdr->ctx[i])
+				kfree(hdr->ctx[i]);
+			hdr->ctx[i] = kzalloc(size, GFP_KERNEL | __GFP_NOWARN);
+		}
+		hdr_info(hdr, "ctx realloc %d -> %d\n", hdr->ctx_size, size);
+		hdr->ctx_size = size;
 	}
 
 	ctx_no = (atomic_inc_return(&hdr->ctx_no) & INT_MAX) % MAX_HDR_CONTEXT;
-	return &hdr->ctx[ctx_no];
+	return hdr->ctx[ctx_no];
 }
 
 static int hdr_dummy_remap(struct exynos_hdr *hdr)
@@ -338,18 +345,18 @@ static int hdr_dummy_buffer(struct exynos_hdr *hdr,
 	struct hdr_lut_header *lut_h;
 	u32 lut_num, size, idx = HDR_DUMMY_CON0_OFFSET;
 	u32 *data;
-	struct hdr_context *ctx;
+	void *ctx;
 
 	if (!IS_HDR_TEST_MODE())
 		return -1;
 
 	ctx = hdr_acquire_context(hdr, HDR_DUMMY_CTX_SIZE(HDR_DUMMY_CON_NUM));
-	if (!ctx || !ctx->data) {
+	if (!ctx) {
 		hdr_err(hdr, "no valid ctx\n");
 		return -1;
 	}
 
-	coef_h = (struct hdr_coef_header *)ctx->data;
+	coef_h = (struct hdr_coef_header *)ctx;
 	coef_h->type.unpack.hw_type = HDR_HW_TYPE_2;
 	coef_h->type.unpack.layer_index = hdr->id;
 	coef_h->type.unpack.log_level = dpu_hdr_dummy_ctx[HDR_DUMMY_LOG_LEVEL];
@@ -374,7 +381,7 @@ static int hdr_dummy_buffer(struct exynos_hdr *hdr,
 
 	exynos_plane_state->hdr_en = (coef_h->sfr_con.unpack.mod_en != 0);
 	exynos_plane_state->hdr_depre_en = IS_HDR_DEPRE_CONV_ACTIVATED(coef_h);
-	exynos_plane_state->hdr_ctx = ctx->data;
+	exynos_plane_state->hdr_ctx = ctx;
 
 	return 0;
 }
@@ -383,8 +390,9 @@ static int hdr_prepare_buffer(struct exynos_hdr *hdr,
 			struct exynos_drm_plane_state *exynos_plane_state)
 {
 	const struct hdr_coef_header *coef_h;
-	struct hdr_context *ctx;
+	void *ctx;
 	int ret;
+	unsigned int total_bytesize;
 
 	ret = hdr_import_buffer(hdr, exynos_plane_state);
 	if (ret < 0)
@@ -396,21 +404,24 @@ static int hdr_prepare_buffer(struct exynos_hdr *hdr,
 		return -1;
 	}
 
-	if (!coef_h->total_bytesize || (coef_h->total_bytesize < sizeof(*coef_h))) {
-		hdr_err(hdr, "invalid size: total %d\n", coef_h->total_bytesize);
+	total_bytesize = coef_h->total_bytesize;
+	if (!total_bytesize
+		|| (total_bytesize < sizeof(*coef_h))
+		|| (total_bytesize > ret)) {
+		hdr_err(hdr, "invalid size: total %d/%d\n", total_bytesize, ret);
 		return -1;
 	}
 
 	ctx = hdr_acquire_context(hdr, ret);
-	if (!ctx || !ctx->data) {
+	if (!ctx) {
 		hdr_err(hdr, "no valid ctx\n");
 		return -1;
 	}
 
-	memcpy(ctx->data, (void *)hdr->vaddr, coef_h->total_bytesize);
+	memcpy(ctx, (void *)hdr->vaddr, total_bytesize);
 	exynos_plane_state->hdr_en = (coef_h->sfr_con.unpack.mod_en != 0);
 	exynos_plane_state->hdr_depre_en = IS_HDR_DEPRE_CONV_ACTIVATED(coef_h);
-	exynos_plane_state->hdr_ctx = ctx->data;
+	exynos_plane_state->hdr_ctx = ctx;
 
 	return 0;
 }

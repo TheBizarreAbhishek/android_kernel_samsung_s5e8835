@@ -938,6 +938,12 @@ static int com_to_uart(struct sm5714_muic_data *muic_data)
 		sm5714_info("[%s:%s] rustproof mode\n", MUIC_DEV_NAME, __func__);
 		return ret;
 	}
+
+#if IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
+	pr_info("[%s:%s] UART path blocked in ship mode, set COM_OPEN\n", MUIC_DEV_NAME, __func__);
+	return com_to_open(muic_data);
+#endif
+
 	reg_val = MANSW_UART;
 	ret = set_com_sw(muic_data, reg_val);
 	if (ret)

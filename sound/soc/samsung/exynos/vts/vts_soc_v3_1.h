@@ -149,6 +149,7 @@
 #define SOUND_MODEL_COUNT (3)
 
 /* DRAM for copying VTS firmware logs */
+#define VTS_READ_SRAM_OFFSET
 #define LOG_BUFFER_BYTES_MAX	   (0x2000)
 #define VTS_SRAMLOG_MSGS_OFFSET	   (0x00046000)
 #define VTS_SRAMLOG_SIZE_MAX	   (SZ_4K)  /* SZ_4K : 0x1000 */

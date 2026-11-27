@@ -48,6 +48,10 @@
 #include <linux/wakelock.h>
 #endif
 
+static int scsc_mx_alloc_retry_cnt = 3;
+module_param(scsc_mx_alloc_retry_cnt, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(scsc_mx_alloc_retry_cnt, "Max number of retries will be tried before returning failure");
+
 struct scsc_mx {
 	struct scsc_mif_abs     *mif_abs;
 	struct mifintrbit       intr;
@@ -117,15 +121,20 @@ struct scsc_mx {
 #endif
 };
 
-
 struct scsc_mx *scsc_mx_create(struct scsc_mif_abs *mif)
 {
-	struct scsc_mx *mx;
+	struct scsc_mx *mx = NULL;
+	int retry = scsc_mx_alloc_retry_cnt;
 
-	mx = kzalloc(sizeof(*mx), GFP_KERNEL);
-	if (!mx)
+	while (retry && !mx) {
+		mx = vzalloc(sizeof(*mx));
+		retry--;
+	}
+
+	if (!mx) {
+		SCSC_TAG_ERR(MXMAN, "mx is NULL after %d tries\n", scsc_mx_alloc_retry_cnt);
 		return NULL;
-
+	}
 	mx->mif_abs = mif;
 
 #if defined(CONFIG_SCSC_INDEPENDENT_SUBSYSTEM)
@@ -180,7 +189,7 @@ void scsc_mx_destroy(struct scsc_mx *mx)
 #ifdef CONFIG_SCSC_WLBTD
 	scsc_wlbtd_deinit();
 #endif
-	kfree(mx);
+	vfree(mx);
 	SCSC_TAG_DEBUG(MXMAN, "OK\n");
 }
 

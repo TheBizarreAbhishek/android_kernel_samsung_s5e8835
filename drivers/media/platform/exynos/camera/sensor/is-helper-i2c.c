@@ -14,6 +14,8 @@
 #include <linux/slab.h>
 
 #include "is-helper-ixc.h"
+#include "is-core.h"
+
 #if IS_ENABLED(CONFIG_SEC_ABC)
 #include <linux/sti/abc_common.h>
 #endif
@@ -532,7 +534,7 @@ static int is_sensor_write16_burst(void *client,
 	if (ret < 0)
 		goto p_err;
 
-	wbuf = kmalloc((2 + (num * 2)), GFP_KERNEL);
+	wbuf = pablo_malloc((2 + (num * 2)), GFP_KERNEL);
 	if (!wbuf) {
 		pr_err("failed to alloc buffer for burst i2c\n");
 		ret = -ENODEV;
@@ -545,11 +547,11 @@ static int is_sensor_write16_burst(void *client,
 		goto p_err_free;
 
 	ixc_info("I2CW16(%d) [0x%04x] : 0x%04x\n", cur_client->addr, addr, *val);
-	kfree(wbuf);
+	pablo_free(wbuf);
 	return 0;
 
 p_err_free:
-	kfree(wbuf);
+	pablo_free(wbuf);
 p_err:
 	return ret;
 }
@@ -589,7 +591,7 @@ static int is_sensor_write8_sequential(void *client,
 	if (ret < 0)
 		goto p_err;
 
-	wbuf = kzalloc((2 + (num * 2)), GFP_KERNEL);
+	wbuf = pablo_zalloc((2 + (num * 2)), GFP_KERNEL);
 	if (!wbuf) {
 		pr_err("failed to alloc buffer for burst i2c\n");
 		ret = -ENODEV;
@@ -602,11 +604,11 @@ static int is_sensor_write8_sequential(void *client,
 		goto p_err_free;
 
 	ixc_info("I2CW08(%d) [0x%04x] : 0x%04x\n", cur_client->addr, addr, *val);
-	kfree(wbuf);
+	pablo_free(wbuf);
 	return 0;
 
 p_err_free:
-	kfree(wbuf);
+	pablo_free(wbuf);
 p_err:
 	return ret;
 }

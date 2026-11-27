@@ -173,8 +173,8 @@ static void camerapp_hw_vra_update_param_kunit_test(struct kunit *test)
 	struct vra_dev *vra;
 	struct vra_ctx *ctx;
 
-	vra = kzalloc(sizeof(struct vra_dev), GFP_KERNEL);
-	ctx = kzalloc(sizeof(struct vra_ctx), GFP_KERNEL);
+	vra = pablo_zalloc(sizeof(struct vra_dev), GFP_KERNEL);
+	ctx = pablo_zalloc(sizeof(struct vra_ctx), GFP_KERNEL);
 
 	ctx->s_frame.width = 320;
 	ctx->s_frame.height = 240;
@@ -191,8 +191,8 @@ static void camerapp_hw_vra_update_param_kunit_test(struct kunit *test)
 
 	func->camerapp_hw_vra_update_param(tctx->addr, vra);
 
-	kfree(ctx);
-	kfree(vra);
+	pablo_free(ctx);
+	pablo_free(vra);
 }
 
 static void camerapp_hw_vra_interrupt_disable_kunit_test(struct kunit *test)

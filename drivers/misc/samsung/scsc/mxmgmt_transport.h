@@ -20,6 +20,7 @@
 
 /** Uses */
 #include <linux/kthread.h>
+#include <linux/spinlock.h>
 #include "mifstream.h"
 
 struct mxmgmt_transport;
@@ -103,6 +104,7 @@ struct mxmgmt_transport {
 	mxmgmt_channel_handler channel_handler_fns[MMTRANS_NUM_CHANNELS];
 	void                   *channel_handler_data[MMTRANS_NUM_CHANNELS];
 	struct mutex           channel_handler_mutex;
+	spinlock_t             mxmgmt_spinlock;
 #if defined(CONFIG_SCSC_INDEPENDENT_SUBSYSTEM)
 	enum scsc_mif_abs_target target;
 #endif

@@ -27,6 +27,7 @@
 #define _MALISW_H_
 
 #include <linux/version.h>
+#include <linux/minmax.h>
 
 /**
  * MIN - Return the lesser of two values.

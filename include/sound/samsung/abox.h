@@ -267,6 +267,14 @@ extern int abox_notify_modem_event(enum abox_modem_event event);
 extern int abox_request_power(struct device *dev, unsigned int id, const char *name);
 
 /**
+ * request abox power and release it automatically after 3 seconds
+ * @param[in]	dev		pointer to abox device
+ * @param[in]	id		key which is used as unique handle
+ * @param[in]	name		cookie for logging
+ */
+extern void abox_request_power_autosuspend(struct device *dev, unsigned int id, const char *name);
+
+/**
  * release abox power
  * @param[in]	dev		pointer to abox device
  * @param[in]	id		key which is used as unique handle
@@ -425,6 +433,10 @@ static inline int abox_notify_modem_event(enum abox_modem_event event)
 static inline int abox_request_power(struct device *dev, unsigned int id, const char *name)
 {
 	return -ENODEV;
+}
+
+static inline void abox_request_power_autosuspend(struct device *dev, unsigned int id, const char *name)
+{
 }
 
 static inline int abox_release_power(struct device *dev, unsigned int id, const char *name)

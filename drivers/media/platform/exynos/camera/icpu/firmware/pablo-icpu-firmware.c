@@ -22,6 +22,7 @@
 #include "pablo-icpu-mem.h"
 #include "pablo-icpu-imgloader.h"
 #include "pablo-icpu-enum.h"
+#include "pablo-mem.h"
 
 static struct icpu_logger _log = {
 	.level = LOGLEVEL_INFO,
@@ -334,7 +335,7 @@ static int __parse_dt(struct device *dev)
 		return -ENOENT;
 	}
 
-	_icpu_fw.mem_desc = kzalloc(sizeof(struct icpu_firmware_mem_desc) * _icpu_fw.num_mem, GFP_KERNEL);
+	_icpu_fw.mem_desc = pablo_zalloc(sizeof(struct icpu_firmware_mem_desc) * _icpu_fw.num_mem, GFP_KERNEL);
 	if (!_icpu_fw.mem_desc)
 		return -ENOMEM;
 
@@ -377,7 +378,7 @@ static int __parse_dt(struct device *dev)
 	return 0;
 
 err:
-	kfree(_icpu_fw.mem_desc);
+	pablo_free(_icpu_fw.mem_desc);
 	_icpu_fw.num_mem = 0;
 
 	return -EINVAL;
@@ -389,7 +390,7 @@ int icpu_firmware_probe(void *dev)
 		/* HACK for backward compatibility. will be removed */
 		struct icpu_firmware_mem_desc *desc;
 		_icpu_fw.num_mem = 1;
-		_icpu_fw.mem_desc = kzalloc(sizeof(struct icpu_firmware_mem_desc) * _icpu_fw.num_mem, GFP_KERNEL);
+		_icpu_fw.mem_desc = pablo_zalloc(sizeof(struct icpu_firmware_mem_desc) * _icpu_fw.num_mem, GFP_KERNEL);
 		if (!_icpu_fw.mem_desc)
 			return -ENOMEM;
 

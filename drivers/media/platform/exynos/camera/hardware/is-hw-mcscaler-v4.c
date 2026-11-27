@@ -205,7 +205,7 @@ static int is_hw_mcsc_open(struct is_hw_ip *hw_ip, u32 instance)
 	frame_manager_probe(hw_ip->framemgr, hw_ip->id, "HWMCS");
 	frame_manager_open(hw_ip->framemgr, IS_MAX_HW_FRAME);
 
-	hw_ip->priv_info = vzalloc(sizeof(struct is_hw_mcsc));
+	hw_ip->priv_info = pablo_zalloc(sizeof(struct is_hw_mcsc), GFP_KERNEL);
 	if (!hw_ip->priv_info) {
 		mserr_hw("hw_ip->priv_info(null)", instance, hw_ip);
 		ret = -ENOMEM;
@@ -222,7 +222,7 @@ static int is_hw_mcsc_open(struct is_hw_ip *hw_ip, u32 instance)
 	hw_mcsc->wdma_max_cnt = mcsc_hw_g_wdma_max_cnt();
 	/* prevent for unused rdma */
 	if (hw_mcsc->rdma_max_cnt) {
-		hw_mcsc->rdma = kcalloc(hw_mcsc->rdma_max_cnt, sizeof(struct is_common_dma), GFP_KERNEL);
+		hw_mcsc->rdma = pablo_calloc(hw_mcsc->rdma_max_cnt, sizeof(struct is_common_dma), GFP_KERNEL);
 		if (!hw_mcsc->rdma) {
 			mserr_hw("Failed to allocate rdma", instance, hw_ip);
 			ret = -ENOMEM;
@@ -230,7 +230,7 @@ static int is_hw_mcsc_open(struct is_hw_ip *hw_ip, u32 instance)
 		}
 	}
 
-	hw_mcsc->wdma = kcalloc(hw_mcsc->wdma_max_cnt, sizeof(struct is_common_dma), GFP_KERNEL);
+	hw_mcsc->wdma = pablo_calloc(hw_mcsc->wdma_max_cnt, sizeof(struct is_common_dma), GFP_KERNEL);
 	if (!hw_mcsc->wdma) {
 		mserr_hw("Failed to allocate wdma", instance, hw_ip);
 		ret = -ENOMEM;
@@ -302,10 +302,10 @@ static int is_hw_mcsc_open(struct is_hw_ip *hw_ip, u32 instance)
 	return 0;
 
 err_alloc_dma:
-	kfree(hw_mcsc->rdma);
-	kfree(hw_mcsc->wdma);
+	pablo_free(hw_mcsc->rdma);
+	pablo_free(hw_mcsc->wdma);
 
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 
 err_alloc:
@@ -389,13 +389,13 @@ static int is_hw_mcsc_close(struct is_hw_ip *hw_ip, u32 instance)
 
 	hw_mcsc = (struct is_hw_mcsc *)hw_ip->priv_info;
 
-	kfree(hw_mcsc->rdma);
-	kfree(hw_mcsc->wdma);
+	pablo_free(hw_mcsc->rdma);
+	pablo_free(hw_mcsc->wdma);
 
 	CALL_BUFOP(hw_mcsc->pb_c_loader_payload, free, hw_mcsc->pb_c_loader_payload);
 	CALL_BUFOP(hw_mcsc->pb_c_loader_header, free, hw_mcsc->pb_c_loader_header);
 
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 	frame_manager_close(hw_ip->framemgr);
 
@@ -3332,7 +3332,7 @@ int is_hw_mcsc_probe(struct is_hw_ip *hw_ip, struct is_interface *itf,
 
 	}
 
-	hw_ip->pmio_reg_seqs = vzalloc(sizeof(struct pmio_reg_seq) * mcsc_hw_g_reg_cnt());
+	hw_ip->pmio_reg_seqs = pablo_zalloc(sizeof(struct pmio_reg_seq) * mcsc_hw_g_reg_cnt(), GFP_KERNEL);
 	if (!hw_ip->pmio_reg_seqs) {
 		err("failed to alloc PMIO multiple write buffer");
 		pmio_field_bulk_free(hw_ip->pmio, hw_ip->pmio_fields);

@@ -1570,6 +1570,7 @@ static int _is_queue_subbuf_prepare(struct device *dev,
 	struct is_sub_dma_buf *sdbuf;
 	u32 index = vb->index;
 	u32 num_i_planes, n;
+	u32 length;
 	unsigned int dbg_draw_digit_ctrl;
 	struct is_mem *mem;
 
@@ -1600,8 +1601,8 @@ static int _is_queue_subbuf_prepare(struct device *dev,
 		if (!node->request)
 			continue;
 
-		if (node->buf.length > IS_MAX_PLANES ||
-			node->vid >= IS_VIDEO_MAX_NUM) {
+		length = node->buf.length;
+		if (node->vid >= IS_VIDEO_MAX_NUM) {
 			mverr("[%s][I%d]subbuf_prepare: invalid output[%d] (req:%d, vid:%d, length:%d) input (req:%d, vid:%d)\n",
 				vctx, video,
 				queue->name, index,
@@ -1615,16 +1616,20 @@ static int _is_queue_subbuf_prepare(struct device *dev,
 			 * So, temporarily BUG() is used here.
 			 */
 			BUG();
-		} else if (!node->buf.length) {
+		} else if (!length || length > IS_MAX_PLANES) {
 			mdbgv_lvn(2, "[%s][%s][I%d]subbuf_prepare: Invalid buf.length %d",
 					vctx, video, queue->name, vn_name[node->vid],
-					index, node->buf.length);
+					index, length);
 			continue;
 		}
 
 		mem = is_hw_get_iommu_mem(node->vid);
 		node->result = 1;
-		num_i_planes = node->buf.length - NUM_OF_META_PLANE;
+		num_i_planes = length - NUM_OF_META_PLANE;
+		if (num_i_planes > IS_MAX_PLANES) {
+			err("Invalid the image plane number %d", num_i_planes);
+			return -EINVAL;
+		}
 
 		sbuf = &queue->out_buf[index];
 		sbuf->ldr_vid = video->id;
@@ -2099,9 +2104,6 @@ int is_buf_prepare(struct vb2_buffer *vb)
 	} else {
 		/* Capture node */
 		frame->stream = (struct camera2_stream *)kva_meta;
-
-		/* TODO : Change type of address into ulong */
-		frame->stream->address = (u32)kva_meta;
 	}
 
 	if (IS_ENABLED(LOGICAL_VIDEO_NODE)) {
@@ -2624,9 +2626,9 @@ static struct is_video_ctx *is_vctx_open(struct file *file,
 		return ERR_PTR(-EINVAL);
 	}
 
-	ivc = vzalloc(sizeof(struct is_video_ctx));
+	ivc = pablo_zalloc(sizeof(struct is_video_ctx), GFP_KERNEL);
 	if (!ivc) {
-		err("[V%02d] vzalloc is fail", video->id);
+		err("[V%02d] pablo_zalloc is fail", video->id);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -2646,7 +2648,7 @@ static int is_vctx_close(struct file *file,
 	struct is_video *video,
 	struct is_video_ctx *vctx)
 {
-	vfree(vctx);
+	pablo_free(vctx);
 	file->private_data = NULL;
 
 	return vref_put(video, NULL);
@@ -2687,7 +2689,7 @@ static int __is_video_open(struct is_video_ctx *ivc,
 		return ret;
 	}
 
-	iq->vbq = vzalloc(sizeof(struct vb2_queue));
+	iq->vbq = pablo_zalloc(sizeof(struct vb2_queue), GFP_KERNEL);
 	if (!iq->vbq) {
 		mverr("out of memory for vbq", ivc, iv);
 		return -ENOMEM;
@@ -2696,7 +2698,7 @@ static int __is_video_open(struct is_video_ctx *ivc,
 	ret = queue_init(ivc, iq->vbq, NULL);
 	if (ret) {
 		mverr("failure in queue_init(): %d", ivc, iv, ret);
-		vfree(iq->vbq);
+		pablo_free(iq->vbq);
 		iq->vbq = NULL;
 		return ret;
 	}
@@ -2717,7 +2719,7 @@ static int __is_video_close(struct is_video_ctx *ivc)
 	}
 
 	vb2_queue_release(iq->vbq);
-	vfree(iq->vbq);
+	pablo_free(iq->vbq);
 	iq->vbq = NULL;
 	is_queue_close(iq);
 

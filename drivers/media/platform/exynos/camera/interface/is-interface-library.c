@@ -436,7 +436,7 @@ static void *alloc_from_mblk(struct lib_mem_block *mblk, u32 size)
 		fpsimd_flag = 1;
 	}
 
-	buf = kzalloc(sizeof(struct lib_buf), GFP_KERNEL);
+	buf = pablo_zalloc(sizeof(struct lib_buf), GFP_KERNEL);
 
 	if (fpsimd_flag)
 		is_fpsimd_get_func();
@@ -449,7 +449,7 @@ static void *alloc_from_mblk(struct lib_mem_block *mblk, u32 size)
 	spin_lock_irqsave(&mblk->lock, flag);
 	if ((mblk->end + size) > mblk->pb->size) {
 		spin_unlock_irqrestore(&mblk->lock, flag);
-		kfree(buf);
+		pablo_free(buf);
 
 		err_lib("out of (%s) memory block, available: %zu, request: %d",
 			mblk->name, mblk->pb->size - mblk->end, size);
@@ -524,7 +524,7 @@ static void free_to_mblk(struct lib_mem_block *mblk, void *kva)
 					buf->kva, &buf->dva, buf->size);
 
 			list_del(&buf->list);
-			kfree(buf);
+			pablo_free(buf);
 
 			break;
 		}
@@ -676,7 +676,7 @@ static void __maybe_unused *is_alloc_dma_pb(u32 size)
 		return NULL;
 	}
 
-	buf = kzalloc(sizeof(struct lib_buf), GFP_KERNEL);
+	buf = pablo_zalloc(sizeof(struct lib_buf), GFP_KERNEL);
 	if (!buf) {
 		err_lib("failed to allocate a library buffer");
 		return NULL;
@@ -685,7 +685,7 @@ static void __maybe_unused *is_alloc_dma_pb(u32 size)
 	pb = CALL_PTR_MEMOP(mem, alloc, mem->priv, size, NULL, 0);
 	if (IS_ERR_OR_NULL(pb)) {
 		err_lib("failed to allocate a private buffer");
-		kfree(buf);
+		pablo_free(buf);
 		return NULL;
 	}
 
@@ -760,7 +760,7 @@ static void __maybe_unused is_free_dma_pb(void *kva)
 			CALL_VOID_BUFOP(pb, free, pb);
 
 			list_del(&buf->list);
-			kfree(buf);
+			pablo_free(buf);
 
 			break;
 		}
@@ -1155,7 +1155,7 @@ int is_sema_init(void **sema, int sema_count)
 	}
 
 	if (*sema == NULL)
-		*sema = kzalloc(sizeof(struct semaphore), GFP_KERNEL);
+		*sema = pablo_zalloc(sizeof(struct semaphore), GFP_KERNEL);
 
 	sema_init((struct semaphore *)*sema, sema_count);
 
@@ -1178,7 +1178,7 @@ int is_sema_finish(void *sema)
 #ifdef LIB_MEM_TRACK
 	add_free_track(MT_TYPE_SEMA, (ulong)sema);
 #endif
-	kfree(sema);
+	pablo_free(sema);
 	return 0;
 }
 
@@ -1219,7 +1219,7 @@ int is_mutex_init(void **mutex)
 	}
 
 	if (*mutex == NULL)
-		*mutex = kzalloc(sizeof(struct mutex), GFP_KERNEL);
+		*mutex = pablo_zalloc(sizeof(struct mutex), GFP_KERNEL);
 
 	mutex_init((struct mutex *)*mutex);
 
@@ -1249,7 +1249,7 @@ int is_mutex_finish(void *mutex_lib)
 #ifdef LIB_MEM_TRACK
 	add_free_track(MT_TYPE_MUTEX, (ulong)mutex_lib);
 #endif
-	kfree(mutex_lib);
+	pablo_free(mutex_lib);
 	return 0;
 }
 
@@ -1732,7 +1732,7 @@ int is_spin_lock_init(void **slock)
 	}
 
 	if (*slock == NULL)
-		*slock = kzalloc(sizeof(spinlock_t), GFP_KERNEL);
+		*slock = pablo_zalloc(sizeof(spinlock_t), GFP_KERNEL);
 
 	spin_lock_init((spinlock_t *)*slock);
 
@@ -1760,7 +1760,7 @@ int is_spin_lock_finish(void *slock_lib)
 #ifdef LIB_MEM_TRACK
 	add_free_track(MT_TYPE_SPINLOCK, (ulong)slock_lib);
 #endif
-	kfree(slock_lib);
+	pablo_free(slock_lib);
 
 	return 0;
 }
@@ -2124,7 +2124,7 @@ int lib_support_init(void)
 #ifdef LIB_MEM_TRACK
 	spin_lock_init(&lib->slock_mem_track);
 	INIT_LIST_HEAD(&lib->list_of_tracks);
-	lib->cur_tracks = vzalloc(sizeof(struct lib_mem_tracks));
+	lib->cur_tracks = pablo_zalloc(sizeof(struct lib_mem_tracks), GFP_KERNEL);
 	if (lib->cur_tracks)
 		list_add(&lib->cur_tracks->list,
 			&lib->list_of_tracks);
@@ -2768,7 +2768,7 @@ static void save_dumped_to_file(struct kthread_work *work)
 	u32 *value;
 	char *line_content;
 
-	content = vzalloc(sizeof(char) * content_size);
+	content = pablo_zalloc(sizeof(char) * content_size, GFP_KERNEL);
 	if (!content) {
 		err("%s:failed to alloc content", __func__);
 		return;
@@ -2808,7 +2808,7 @@ static void save_dumped_to_file(struct kthread_work *work)
 p_err2:
 	__putname(filename);
 p_err1:
-	vfree(content);
+	pablo_free(content);
 }
 #endif
 
@@ -2986,7 +2986,7 @@ int is_dump_init_reg_dump(u32 count)
 
 	lib->dump_to_file.dump_set_size = count;
 	atomic_set(&lib->dump_to_file.dump_set_idx, 0);
-	lib->dump_to_file.is_dump_set = vzalloc(sizeof(struct is_dump_set) * count);
+	lib->dump_to_file.is_dump_set = pablo_zalloc(sizeof(struct is_dump_set) * count, GFP_KERNEL);
 	kthread_init_worker(&lib->dump_to_file.worker);
 	snprintf(name, sizeof(name), "is_debugging");
 	lib->dump_to_file.task = kthread_run(kthread_worker_fn, &lib->dump_to_file.worker, name);
@@ -3008,7 +3008,7 @@ int is_dump_init_reg_dump(u32 count)
 	return 0;
 
 p_err:
-	vfree(lib->dump_to_file.is_dump_set);
+	pablo_free(lib->dump_to_file.is_dump_set);
 	lib->dump_to_file.dump_set_size = 0;
 
 	return ret;
@@ -3904,7 +3904,7 @@ int pablo_lib_init_reserv_mem(struct reserved_mem *rmem)
 
 	npages = pablo_bin_vm.size >> PAGE_SHIFT;
 	page = phys_to_page(pablo_bin_vm.phys_addr);
-	pages = kmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
+	pages = pablo_malloc_array(npages, sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
 		probe_err("failed to alloc pages: %d", npages);
 		return -ENOMEM;
@@ -3920,7 +3920,7 @@ int pablo_lib_init_reserv_mem(struct reserved_mem *rmem)
 	if (map_vm_area(&pablo_bin_vm, prot, pages)) {
 #endif
 		probe_err("failed to map rmem for binary");
-		kfree(pages);
+		pablo_free(pages);
 		return -ENOMEM;
 	}
 
@@ -3928,7 +3928,7 @@ int pablo_lib_init_reserv_mem(struct reserved_mem *rmem)
 					pablo_bin_vm.addr,
 					&rmem->base, &rmem->size);
 
-	kfree(pages);
+	pablo_free(pages);
 
 	return 0;
 }
@@ -3942,7 +3942,7 @@ static int pablo_alloc_n_map(struct is_mem *mem, struct vm_struct *vm, pgprot_t 
 	struct page **pages;
 	struct page **tpages;
 
-	pages = vmalloc(sizeof(struct page *) * npages);
+	pages = pablo_malloc(sizeof(struct page *) * npages, GFP_KERNEL);
 	if (!pages) {
 		probe_err("failed to alloc pages: %d", npages);
 		return -ENOMEM;
@@ -3954,7 +3954,7 @@ static int pablo_alloc_n_map(struct is_mem *mem, struct vm_struct *vm, pgprot_t 
 	if (IS_ERR_OR_NULL(pb)) {
 		probe_err("failed to alloc buffer - addr: 0x%pK, size: 0x%lx",
 							vm->addr, vm->size);
-		vfree(pages);
+		pablo_free(pages);
 		return -ENOMEM;
 	}
 
@@ -3965,7 +3965,7 @@ static int pablo_alloc_n_map(struct is_mem *mem, struct vm_struct *vm, pgprot_t 
 		if (i >= npages) {
 			probe_err("failed to setup pages: %d", npages);
 			CALL_VOID_BUFOP(pb, free, pb);
-			vfree(pages);
+			pablo_free(pages);
 			return -EINVAL;
 		}
 
@@ -3982,12 +3982,12 @@ static int pablo_alloc_n_map(struct is_mem *mem, struct vm_struct *vm, pgprot_t 
 		probe_err("failed to map buffer - addr: 0x%pK, size: 0x%lx",
 							vm->addr, vm->size);
 		CALL_VOID_BUFOP(pb, free, pb);
-		vfree(pages);
+		pablo_free(pages);
 		return -ENOMEM;
 	}
 
 	probe_info("[RSC]alloc & map(V/S): 0x%pK/0x%lx\n", vm->addr, vm->size);
-	vfree(pages);
+	pablo_free(pages);
 
 	return 0;
 }

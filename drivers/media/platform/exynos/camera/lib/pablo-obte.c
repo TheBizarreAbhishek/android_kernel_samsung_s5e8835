@@ -292,9 +292,9 @@ unsigned char *pablo_obte_alloc(unsigned long size)
 	unsigned char *new_addr;
 
 	if (use_vmalloc_memory)
-		new_addr = vzalloc(size);
+		new_addr = pablo_zalloc(size, GFP_KERNEL);
 	else
-		new_addr = kzalloc(size, GFP_KERNEL);
+		new_addr = pablo_zalloc(size, GFP_KERNEL);
 
 	if (!new_addr) {
 		err_obte("alloc fail, size (%lu)\n", size);
@@ -332,9 +332,9 @@ void pablo_obte_buf_free(unsigned int id)
 
 	if (addr) {
 		if (use_vmalloc_memory)
-			vfree(addr);
+			pablo_free(addr);
 		else
-			kfree(addr);
+			pablo_free(addr);
 
 		pablo_obte_buf_setaddr(id, NULL);
 		dbg_obte("free('%s')\n", pablo_obte_buf_name(id));
@@ -369,9 +369,9 @@ void pablo_obte_stripe_value_buf_free(u32 dump_id, u32 reg_value_buf_id)
 
 	if (temp_stripe_buf->reg_value[reg_value_buf_id]) {
 		if (use_vmalloc_memory)
-			vfree(temp_stripe_buf->reg_value[reg_value_buf_id]);
+			pablo_free(temp_stripe_buf->reg_value[reg_value_buf_id]);
 		else
-			kfree(temp_stripe_buf->reg_value[reg_value_buf_id]);
+			pablo_free(temp_stripe_buf->reg_value[reg_value_buf_id]);
 
 		temp_stripe_buf->reg_value[reg_value_buf_id] = NULL;
 		if (temp_stripe_buf->reg_value_buf_num > 0)

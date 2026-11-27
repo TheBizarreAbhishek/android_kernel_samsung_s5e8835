@@ -19,6 +19,7 @@
 
 #include "pablo-mmio.h"
 #include "pmio.h"
+#include "pablo-mem.h"
 #define CREATE_TRACE_POINTS
 #include "trace_pmio.h"
 #include "is-common-config.h"
@@ -215,8 +216,8 @@ static void pmio_range_exit(struct pablo_mmio *pmio)
 		range = rb_entry(next, struct pmio_range_node, node);
 		next = rb_next(&range->node);
 		rb_erase(&range->node, &pmio->range_tree);
-		kfree(range->cache);
-		kfree(range);
+		pablo_free(range->cache);
+		pablo_free(range);
 	}
 }
 
@@ -241,7 +242,7 @@ struct pablo_mmio *pmio_init(void *dev, void *ctx, const struct pmio_config *con
 	if (!config)
 		return ERR_PTR(-EINVAL);
 
-	pmio = kzalloc(sizeof(*pmio), GFP_KERNEL);
+	pmio = pablo_zalloc(sizeof(*pmio), GFP_KERNEL);
 	if (!pmio) {
 		ret = -ENOMEM;
 		goto err_alloc_pmio;
@@ -318,7 +319,7 @@ struct pablo_mmio *pmio_init(void *dev, void *ctx, const struct pmio_config *con
 			goto err_init_range;
 		}
 
-		new = kzalloc(sizeof(*new), GFP_KERNEL);
+		new = pablo_zalloc(sizeof(*new), GFP_KERNEL);
 		if (!new) {
 			pr_err("failed to alloc range %d\n", i);
 			ret = -ENOMEM;
@@ -355,19 +356,19 @@ struct pablo_mmio *pmio_init(void *dev, void *ctx, const struct pmio_config *con
 		new->stride = range->stride;
 		new->cache_size = range->count * range->stride * PMIO_REG_STRIDE;
 		new->cache_dirty = false;
-		new->cache = kzalloc(new->cache_size, GFP_KERNEL);
+		new->cache = pablo_zalloc(new->cache_size, GFP_KERNEL);
 		if (!new->cache) {
 			pr_err("failed to alloc range cache %d\n", i);
 			ret = -ENOMEM;
-			kfree(new);
+			pablo_free(new);
 			goto err_init_range;
 		}
 
 		if (!pmio_range_add(pmio, new)) {
 			pr_err("failed to add range %d\n", i);
 			ret = -ENOMEM;
-			kfree(new->cache);
-			kfree(new);
+			pablo_free(new->cache);
+			pablo_free(new);
 			goto err_init_range;
 		}
 	}
@@ -388,7 +389,7 @@ err_set_name:
 	kfree_const(pmio->name);
 
 err_alloc_pmio:
-	kfree(pmio);
+	pablo_free(pmio);
 
 	return ERR_PTR(ret);
 }
@@ -406,7 +407,7 @@ void pmio_exit(struct pablo_mmio *pmio)
 	pmio_cache_exit(pmio);
 	pmio_range_exit(pmio);
 	kfree_const(pmio->name);
-	kfree(pmio);
+	pablo_free(pmio);
 }
 EXPORT_SYMBOL(pmio_exit);
 
@@ -1255,7 +1256,7 @@ static void pmio_field_init(struct pmio_field *field, struct pablo_mmio *pmio,
 struct pmio_field *pmio_field_alloc(struct pablo_mmio *pmio,
 				    struct pmio_field_desc desc)
 {
-	struct pmio_field *field = kzalloc(sizeof(*field), GFP_KERNEL);
+	struct pmio_field *field = pablo_zalloc(sizeof(*field), GFP_KERNEL);
 
 	if (!field)
 		return ERR_PTR(-ENOMEM);
@@ -1275,7 +1276,7 @@ EXPORT_SYMBOL(pmio_field_alloc);
  */
 void pmio_field_free(struct pmio_field *field)
 {
-	kfree(field);
+	pablo_free(field);
 }
 EXPORT_SYMBOL(pmio_field_free);
 
@@ -1303,14 +1304,14 @@ int pmio_field_bulk_alloc(struct pablo_mmio *pmio,
 	if (!num_fields)
 		return -EINVAL;
 
-	pf = kcalloc(num_fields, sizeof(*pf), GFP_KERNEL);
+	pf = pablo_calloc(num_fields, sizeof(*pf), GFP_KERNEL);
 	if (!pf)
 		return -ENOMEM;
 
 	if (!*fields) {
 		*fields = pf;
 
-		pmio->fields = kcalloc(num_fields, sizeof(pf), GFP_KERNEL);
+		pmio->fields = pablo_calloc(num_fields, sizeof(pf), GFP_KERNEL);
 		for (i = 0; i < num_fields; i++) {
 			pmio_field_init(&pf[i], pmio, descs[i]);
 			pmio->fields[i] = &pf[i];
@@ -1336,9 +1337,9 @@ EXPORT_SYMBOL(pmio_field_bulk_alloc);
  */
 void pmio_field_bulk_free(struct pablo_mmio *pmio, struct pmio_field *fields)
 {
-	kfree(fields);
+	pablo_free(fields);
 	if (pmio->fields) {
-		kfree(pmio->fields);
+		pablo_free(pmio->fields);
 		pmio->fields = NULL;
 	}
 }

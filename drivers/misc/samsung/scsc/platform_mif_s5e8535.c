@@ -1773,6 +1773,11 @@ static int platform_mif_reset(struct scsc_mif_abs *interface, bool reset)
 #endif
 			/* Put back into reset */
 			ret = platform_mif_pmu_reset_assert(interface);
+			if (ret) {
+				SCSC_TAG_INFO_DEV(PLAT_MIF, platform->dev, "PMU reset operation failed ret = %d\n",
+						  ret);
+				platform_wlbt_karamdump(interface);
+			}
 
 			/* Free pmu array */
 			if (platform->ka_patch_fw) {

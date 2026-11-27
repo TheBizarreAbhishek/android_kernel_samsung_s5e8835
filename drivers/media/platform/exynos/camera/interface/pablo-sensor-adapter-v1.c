@@ -813,7 +813,7 @@ static int pablo_sensor_adt_open(struct pablo_sensor_adt *adt, u32 instance,
 
 	if (atomic_inc_return(&adt->rsccount) == 1) {
 		/* alloc priv */
-		sensor_adt = vzalloc(sizeof(struct pablo_sensor_adt_v1));
+		sensor_adt = pablo_zalloc(sizeof(struct pablo_sensor_adt_v1), GFP_KERNEL);
 		if (!sensor_adt) {
 			merr_adt("failed to alloc pablo_sensor_adt_v1", instance);
 			ret = -ENOMEM;
@@ -841,7 +841,7 @@ static int pablo_sensor_adt_open(struct pablo_sensor_adt *adt, u32 instance,
 	return 0;
 
 err_kthread:
-	vfree(adt->priv);
+	pablo_free(adt->priv);
 	adt->priv = NULL;
 err_alloc:
 	atomic_dec(&adt->rsccount);
@@ -887,7 +887,7 @@ static int pablo_sensor_adt_close(struct pablo_sensor_adt *adt)
 
 		clear_bit(IS_SENSOR_ADT_OPEN, &sensor_adt->state);
 
-		vfree(adt->priv);
+		pablo_free(adt->priv);
 		adt->priv = NULL;
 	}
 

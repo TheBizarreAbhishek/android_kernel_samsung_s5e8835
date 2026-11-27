@@ -638,6 +638,19 @@ static void exynos_atomic_wait_for_vblanks(struct drm_device *dev,
 	}
 }
 
+static void __release_windows(struct drm_device *dev, unsigned int win_mask)
+{
+	struct exynos_drm_private *priv;
+
+	if (!win_mask)
+		return;
+
+	priv = dev->dev_private;
+	mutex_lock(&priv->lock);
+	priv->available_win_mask |= win_mask;
+	mutex_unlock(&priv->lock);
+}
+
 static void
 exynos_atomic_framestart_post_processing(struct drm_atomic_state *old_state)
 {
@@ -646,7 +659,6 @@ exynos_atomic_framestart_post_processing(struct drm_atomic_state *old_state)
 	const struct drm_connector *conn;
 	const struct drm_connector_state *new_conn_state;
 	const struct exynos_drm_crtc_state *new_exynos_crtc_state;
-	struct exynos_drm_private *priv;
 	int i;
 
 	for_each_new_connector_in_state(old_state, conn, new_conn_state, i) {
@@ -658,15 +670,8 @@ exynos_atomic_framestart_post_processing(struct drm_atomic_state *old_state)
 
 	for_each_new_crtc_in_state(old_state, crtc, new_crtc_state, i) {
 		new_exynos_crtc_state = to_exynos_crtc_state(new_crtc_state);
-		if (!new_exynos_crtc_state->freed_win_mask)
-			continue;
-
-		priv = old_state->dev->dev_private;
-
-		/* release windows after framestart */
-		mutex_lock(&priv->lock);
-		priv->available_win_mask |= new_exynos_crtc_state->freed_win_mask;
-		mutex_unlock(&priv->lock);
+		__release_windows(old_state->dev, new_exynos_crtc_state->freed_win_mask);
+		exynos_crtc_send_event(to_exynos_crtc(crtc));
 	}
 
 	for_each_new_connector_in_state(old_state, conn, new_conn_state, i) {

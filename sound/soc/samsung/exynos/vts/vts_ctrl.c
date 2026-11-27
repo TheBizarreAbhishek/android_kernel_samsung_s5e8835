@@ -530,16 +530,16 @@ static int vts_ctrl_set_force_trigger(struct snd_kcontrol *kcontrol,
 		= snd_soc_kcontrol_component(kcontrol);
 	struct device *dev = component->dev;
 	struct vts_data *data = vts_get_vts_data();
-	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	struct soc_mixer_control *e = (struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int *item = ucontrol->value.enumerated.item;
 	u32 values[3];
 	int result = 0;
 	int val = ucontrol->value.integer.value[0];
 
-	if (item[0] >= e->items) {
+	if (item[0] > e->max) {
 		vts_dev_err(dev,
 			"%s try to set %d but should be under %d\n",
-			__func__, item[0], e->items);
+			__func__, item[0], e->max);
 		return -EINVAL;
 	}
 
@@ -576,13 +576,13 @@ static int vts_ctrl_set_supported_mic_num(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct device *dev = component->dev;
 	struct vts_data *data = vts_get_vts_data();
-	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	struct soc_mixer_control *e = (struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int *item = ucontrol->value.enumerated.item;
 
-	if (item[0] >= e->items) {
+	if (item[0] > e->max) {
 		vts_dev_err(dev,
 			"%s try to set %d but should be under %d\n",
-			__func__, item[0], e->items);
+			__func__, item[0], e->max);
 		return -EINVAL;
 	}
 
@@ -605,16 +605,16 @@ static int vts_ctrl_set_force_error(struct snd_kcontrol *kcontrol, struct snd_ct
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct device *dev = component->dev;
 	struct vts_data *data = vts_get_vts_data();
-	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	struct soc_mixer_control *e = (struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int *item = ucontrol->value.enumerated.item;
 	u32 values[3];
 	int result = 0;
 	int val = ucontrol->value.integer.value[0];
 
-	if (item[0] >= e->items) {
+	if (item[0] > e->max) {
 		vts_dev_err(dev,
 			"%s try to set %d but should be under %d\n",
-			__func__, item[0], e->items);
+			__func__, item[0], e->max);
 		return -EINVAL;
 	}
 
@@ -651,13 +651,13 @@ static int vts_ctrl_set_sysclk_div(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct device *dev = component->dev;
 	struct vts_data *data = vts_get_vts_data();
-	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	struct soc_mixer_control *e = (struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int *item = ucontrol->value.enumerated.item;
 
-	if (item[0] >= e->items) {
+	if (item[0] == 0 || item[0] > e->max) {
 		vts_dev_err(dev,
 			"%s try to set %d but should be under %d\n",
-			__func__, item[0], e->items);
+			__func__, item[0], e->max);
 		return -EINVAL;
 	}
 
@@ -686,13 +686,13 @@ static int vts_ctrl_set_reset_support(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
 	struct device *dev = component->dev;
 	struct vts_data *data = vts_get_vts_data();
-	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	struct soc_mixer_control *e = (struct soc_mixer_control *)kcontrol->private_value;
 	unsigned int *item = ucontrol->value.enumerated.item;
 
-	if (item[0] >= e->items) {
+	if (item[0] > e->max) {
 		vts_dev_err(dev,
 			"%s try to set %d but should be under %d\n",
-			__func__, item[0], e->items);
+			__func__, item[0], e->max);
 		return -EINVAL;
 	}
 

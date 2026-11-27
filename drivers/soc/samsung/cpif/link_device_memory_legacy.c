@@ -343,7 +343,7 @@ struct sk_buff *recv_from_legacy_link(struct mem_link_device *mld,
 	unsigned int out = get_rxq_tail(dev);
 	unsigned int rest = circ_get_usage(qsize, in, out);
 	unsigned int len;
-	char hdr[EXYNOS_HEADER_SIZE];
+	char hdr[EXYNOS_HEADER_SIZE] = {0, };
 	char pr_buff[BAD_MSG_BUFFER_SIZE];
 
 	/* Copy the header in a frame to the header buffer */
@@ -369,7 +369,7 @@ struct sk_buff *recv_from_legacy_link(struct mem_link_device *mld,
 
 	/* Verify the length of the frame (data + padding) */
 	len = ld->get_total_len(hdr);
-	if (unlikely(len > rest)) {
+	if (unlikely(len > rest || len == 0)) {
 		mif_err("%s: ERR! %s BAD LEN %d > rest %d\n",
 			ld->name, dev->name, len, rest);
 		goto bad_msg;

@@ -86,6 +86,9 @@ enum sec_power_flags {
 
 #define SEC_DUMPSINK_MASK 0x0000FFFF
 
+static unsigned int reboot_multicmd = 1;
+module_param_named(reboot_multicmd, reboot_multicmd, uint, 0444);
+
 /* PANIC INFORM */
 #define SEC_RESET_REASON_PREFIX		0x12345600
 #define SEC_RESET_SET_PREFIX		0xabc00000

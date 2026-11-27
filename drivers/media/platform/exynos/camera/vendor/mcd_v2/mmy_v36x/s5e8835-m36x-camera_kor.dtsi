@@ -69,7 +69,6 @@
 					};
 
 					scenario_vision_off {
-						85 { pname = "VDDIO_RCAM1_1P8"; pin = <PIN_OUTPUT 0 0>; gpio = <&s2mpu16_gpio 9 0x1>; };
 						90 { pname = "vdd_ldo22"; pin = <PIN_REGULATOR 0 0>; share = <SRT_RELEASE SHARED_PIN0 0>; };
 						100 { pname = "VDD_VT_UW_MACRO_A2P8"; pin = <PIN_OUTPUT 0 1000>; gpio = <&gpm12 0 0x1>; share = <SRT_RELEASE SHARED_PIN1 0>; };
 					};

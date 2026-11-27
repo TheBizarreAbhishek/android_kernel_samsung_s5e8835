@@ -900,7 +900,7 @@ static int is_hw_cstat_open(struct is_hw_ip *hw_ip, u32 instance)
 	frame_manager_probe(hw_ip->framemgr, hw_ip->id, "HWCSTAT");
 	frame_manager_open(hw_ip->framemgr, IS_MAX_HW_FRAME);
 
-	hw = vzalloc(sizeof(struct is_hw_cstat));
+	hw = pablo_zalloc(sizeof(struct is_hw_cstat), GFP_KERNEL);
 	if (!hw) {
 		mserr_hw("failed to alloc is_hw_cstat", instance, hw_ip);
 		ret = -ENOMEM;
@@ -910,14 +910,14 @@ static int is_hw_cstat_open(struct is_hw_ip *hw_ip, u32 instance)
 	hw_ip->priv_info = (void *)hw;
 	hw->icpu_adt = pablo_get_icpu_adt();
 
-	hw->iq_set.regs = vzalloc(sizeof(struct cr_set) * reg_cnt);
+	hw->iq_set.regs = pablo_zalloc(sizeof(struct cr_set) * reg_cnt, GFP_KERNEL);
 	if (!hw->iq_set.regs) {
 		mserr_hw("failed to alloc iq_set.regs", instance, hw_ip);
 		ret = -ENOMEM;
 		goto err_regs_alloc;
 	}
 
-	hw->cur_iq_set.regs = vzalloc(sizeof(struct cr_set) * reg_cnt);
+	hw->cur_iq_set.regs = pablo_zalloc(sizeof(struct cr_set) * reg_cnt, GFP_KERNEL);
 	if (!hw->cur_iq_set.regs) {
 		mserr_hw("failed to alloc cur_iq_set.regs", instance, hw_ip);
 		ret = -ENOMEM;
@@ -945,11 +945,11 @@ static int is_hw_cstat_open(struct is_hw_ip *hw_ip, u32 instance)
 	return 0;
 
 err_cur_regs_alloc:
-	vfree(hw->iq_set.regs);
+	pablo_free(hw->iq_set.regs);
 	hw->iq_set.regs = NULL;
 
 err_regs_alloc:
-	vfree(hw);
+	pablo_free(hw);
 	hw_ip->priv_info = NULL;
 
 err_hw_alloc:
@@ -1076,12 +1076,12 @@ static int is_hw_cstat_close(struct is_hw_ip *hw_ip, u32 instance)
 
 	hw = (struct is_hw_cstat *)hw_ip->priv_info;
 
-	vfree(hw->iq_set.regs);
+	pablo_free(hw->iq_set.regs);
 	hw->iq_set.regs = NULL;
-	vfree(hw->cur_iq_set.regs);
+	pablo_free(hw->cur_iq_set.regs);
 	hw->cur_iq_set.regs = NULL;
 
-	vfree(hw);
+	pablo_free(hw);
 	hw_ip->priv_info = NULL;
 
 	frame_manager_close(hw_ip->framemgr);

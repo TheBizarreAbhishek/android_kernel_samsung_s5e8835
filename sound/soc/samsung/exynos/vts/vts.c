@@ -700,6 +700,16 @@ static irqreturn_t vts_boot_completed_handler(int irq, void *dev_id)
 	struct device *dev = &pdev->dev;
 	struct vts_data *data = platform_get_drvdata(pdev);
 	uint32_t ret = 0;
+#ifdef VTS_READ_SRAM_OFFSET
+	u32 fw_sram_offset;
+
+	/* Overwrite vts SRAM offset for compatibility with different projects */
+	vts_mailbox_read_shared_register(data->pdev_mailbox,
+						&fw_sram_offset, 0, 1);
+	data->sramlog_baseaddr = (char *)(data->sram_base + fw_sram_offset);
+	data->shared_info = (struct vts_shared_info *)(data->sramlog_baseaddr + VTS_SRAMLOG_SIZE_MAX);
+	vts_dev_info(dev, "%s: read vts_fw SRAM offset:%#x\n", __func__, fw_sram_offset);
+#endif
 
 	data->vts_ready = 1;
 

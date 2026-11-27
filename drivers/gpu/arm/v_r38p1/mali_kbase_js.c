@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2011-2025 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2026 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -590,6 +590,7 @@ int kbasep_js_devdata_init(struct kbase_device * const kbdev)
 #if KBASE_DISABLE_SCHEDULING_SOFT_STOPS && KBASE_DISABLE_SCHEDULING_HARD_STOPS
 	dev_dbg(kbdev->dev, "Note: The JS tick timer (if coded) will still be run, but do nothing.");
 #endif
+#include <linux/kthread.h>
 
 	for (i = 0; i < kbdev->gpu_props.num_job_slots; ++i)
 		jsdd->js_reqs[i] = core_reqs_from_jsn_features(
@@ -3020,7 +3021,7 @@ static void js_return_of_end_rp(struct kbase_jd_atom *const end_katom)
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 }
 
-static void js_return_worker(struct work_struct *data)
+static void js_return_worker(struct kthread_work *data)
 {
 	struct kbase_jd_atom *katom = container_of(data, struct kbase_jd_atom,
 									work);
@@ -3169,15 +3170,13 @@ void kbase_js_unpull(struct kbase_context *kctx, struct kbase_jd_atom *katom)
 
 	jsctx_rb_unpull(kctx, katom);
 
-	WARN_ON(work_pending(&katom->work));
-
 	/* Block re-submission until workqueue has run */
 	atomic_inc(&katom->blocked);
 
 	kbase_job_check_leave_disjoint(kctx->kbdev, katom);
 
-	INIT_WORK(&katom->work, js_return_worker);
-	queue_work(kctx->jctx.job_done_wq, &katom->work);
+	kthread_init_work(&katom->work, js_return_worker);
+	kthread_queue_work(kctx->jctx.job_done_worker, &katom->work);
 }
 
 /**

@@ -22,6 +22,7 @@
 #include "pablo-icpu.h"
 #include "pablo-icpu-hw-itf.h"
 #include "pablo-icpu-hw.h"
+#include "pablo-mem.h"
 
 static struct icpu_logger _log = {
 	.level = LOGLEVEL_INFO,
@@ -183,7 +184,7 @@ static int __get_force_powerdown_sequence(struct device_node *np, struct icpu_pl
 	pdata->num_force_powerdown_step = tmp / (sizeof(u32) * ICPU_IO_SEQUENCE_LEN);
 
 	pdata->force_powerdown_seq =
-		kzalloc(sizeof(struct icpu_io_sequence) * pdata->num_force_powerdown_step, GFP_KERNEL);
+		pablo_zalloc(sizeof(struct icpu_io_sequence) * pdata->num_force_powerdown_step, GFP_KERNEL);
 	if (!pdata->force_powerdown_seq) {
 		ICPU_ERR("fail to alloc");
 		return -ENOMEM;
@@ -212,7 +213,7 @@ static int __get_force_powerdown_sequence(struct device_node *np, struct icpu_pl
 	return 0;
 
 error:
-	kfree(pdata->force_powerdown_seq);
+	pablo_free(pdata->force_powerdown_seq);
 	pdata->force_powerdown_seq = NULL;
 
 	return ret;
@@ -234,7 +235,7 @@ static int __get_sw_reset_sequence(struct device_node *np, struct icpu_platform_
 	pdata->num_sw_reset_step = tmp / (sizeof(u32) * ICPU_IO_SEQUENCE_LEN);
 
 	pdata->sw_reset_seq =
-		kcalloc(pdata->num_sw_reset_step, sizeof(struct icpu_io_sequence), GFP_KERNEL);
+		pablo_calloc(pdata->num_sw_reset_step, sizeof(struct icpu_io_sequence), GFP_KERNEL);
 	if (!pdata->sw_reset_seq) {
 		ICPU_ERR("fail to alloc");
 		return -ENOMEM;
@@ -260,7 +261,7 @@ static int __get_sw_reset_sequence(struct device_node *np, struct icpu_platform_
 	return 0;
 
 error:
-	kfree(pdata->sw_reset_seq);
+	pablo_free(pdata->sw_reset_seq);
 	pdata->sw_reset_seq = NULL;
 
 	return ret;
@@ -289,7 +290,7 @@ int pablo_icpu_hw_probe(void *pdev)
 	dev = &((struct platform_device *)pdev)->dev;
 	np = dev->of_node;
 
-	pdata = kzalloc(sizeof(struct icpu_platform_data), GFP_KERNEL);
+	pdata = pablo_zalloc(sizeof(struct icpu_platform_data), GFP_KERNEL);
 	if (!pdata) {
 		ICPU_ERR("no memory for platform data");
 		return -ENOMEM;
@@ -366,7 +367,7 @@ int pablo_icpu_hw_probe(void *pdev)
 
 		pdata->num_tx_mbox = num_mbox;
 
-		pdata->tx_infos = kzalloc(sizeof(struct icpu_mbox_tx_info) * num_mbox, GFP_KERNEL);
+		pdata->tx_infos = pablo_zalloc(sizeof(struct icpu_mbox_tx_info) * num_mbox, GFP_KERNEL);
 		if (!pdata->tx_infos) {
 			__putname(name);
 			goto alloc_fail;
@@ -410,7 +411,7 @@ int pablo_icpu_hw_probe(void *pdev)
 
 		pdata->num_rx_mbox = num_mbox;
 
-		pdata->rx_infos = kzalloc(sizeof(struct icpu_mbox_rx_info) * num_mbox, GFP_KERNEL);
+		pdata->rx_infos = pablo_zalloc(sizeof(struct icpu_mbox_rx_info) * num_mbox, GFP_KERNEL);
 		if (!pdata->rx_infos) {
 			__putname(name);
 			goto alloc_fail;
@@ -458,11 +459,11 @@ int pablo_icpu_hw_probe(void *pdev)
 	return 0;
 
 alloc_fail:
-	kfree(pdata->tx_infos);
-	kfree(pdata->rx_infos);
-	kfree(pdata->sw_reset_seq);
-	kfree(pdata->force_powerdown_seq);
-	kfree(pdata);
+	pablo_free(pdata->tx_infos);
+	pablo_free(pdata->rx_infos);
+	pablo_free(pdata->sw_reset_seq);
+	pablo_free(pdata->force_powerdown_seq);
+	pablo_free(pdata);
 
 	return -ENOMEM;
 }
@@ -472,9 +473,9 @@ void pablo_icpu_hw_remove(struct icpu_platform_data *pdata)
 	if (!pdata)
 		return;
 
-	kfree(pdata->tx_infos);
-	kfree(pdata->rx_infos);
-	kfree(pdata->sw_reset_seq);
-	kfree(pdata->force_powerdown_seq);
-	kfree(pdata);
+	pablo_free(pdata->tx_infos);
+	pablo_free(pdata->rx_infos);
+	pablo_free(pdata->sw_reset_seq);
+	pablo_free(pdata->force_powerdown_seq);
+	pablo_free(pdata);
 }

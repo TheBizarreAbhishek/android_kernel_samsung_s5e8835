@@ -16,6 +16,7 @@
 #if IS_ENABLED(CONFIG_EXYNOS_IMGLOADER)
 #include <soc/samsung/exynos/imgloader.h>
 #include <linux/slab.h>
+#include "pablo-mem.h"
 #endif
 
 #include "pablo-icpu.h"
@@ -105,7 +106,7 @@ static int __init_imgloader_desc(void *dev, void **desc)
 	int ret = 0;
 	void *_desc = NULL;
 #if IS_ENABLED(CONFIG_EXYNOS_IMGLOADER)
-	struct imgloader_desc *loader = kzalloc(sizeof(struct imgloader_desc), GFP_KERNEL);
+	struct imgloader_desc *loader = pablo_zalloc(sizeof(struct imgloader_desc), GFP_KERNEL);
 
 	loader->dev = dev;
 	loader->owner = THIS_MODULE;
@@ -117,7 +118,7 @@ static int __init_imgloader_desc(void *dev, void **desc)
 	ret = imgloader_desc_init(loader);
 	if (ret) {
 		ICPU_ERR("exynos_imgloader_desc_init fail, ret(%d)", ret);
-		kfree(loader);
+		pablo_free(loader);
 		loader = NULL;
 	}
 
@@ -220,7 +221,7 @@ void pablo_icpu_imgloader_release(void)
 	if (_imgloader.desc) {
 		imgloader_shutdown(_imgloader.desc);
 		imgloader_desc_release(_imgloader.desc);
-		kfree(_imgloader.desc);
+		pablo_free(_imgloader.desc);
 	}
 #endif
 

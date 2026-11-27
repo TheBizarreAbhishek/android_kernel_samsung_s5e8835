@@ -2027,12 +2027,6 @@ static int pdic_policy_handle_usb_ext_noti(struct notifier_block *nb,
 				pdic_policy_dp_detach(pp_data);
 				mutex_unlock(&pp_data->p_lock);
 			}
-		} else {
-			if (alt_info->dp_device) {
-				mutex_lock(&pp_data->p_lock);
-				pdic_policy_dp_detach(pp_data);
-				mutex_unlock(&pp_data->p_lock);
-			}
 		}
 		break;
 	case EXTERNAL_NOTIFY_HOSTBLOCK_POST:

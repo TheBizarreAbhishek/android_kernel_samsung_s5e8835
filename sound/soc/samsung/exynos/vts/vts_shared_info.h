@@ -77,11 +77,14 @@ struct vts_shared_config {
 };
 
 struct vts_shared_info {
-	unsigned int log_pos_write;
-	unsigned int log_pos_read;
-	unsigned int kernel_sec;
-	unsigned int kernel_msec;
+	volatile unsigned int log_pos_write;
+	volatile unsigned int log_pos_read;
+	volatile unsigned int kernel_sec;
+	volatile unsigned int kernel_msec;
 	unsigned int vendor_data[10];
+#if defined(CONFIG_SOC_S5E8835)
+	unsigned int stored_num_data[10]; /* 0~2: ID 1, 3~5: ID 2, 6~8: ID 3 */
+#endif
 	char hotword_id[40];
 	unsigned int pcm_buf_offset;
 	struct vts_shared_config config_ap;

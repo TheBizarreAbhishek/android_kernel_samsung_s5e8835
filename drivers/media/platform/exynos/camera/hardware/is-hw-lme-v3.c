@@ -194,7 +194,7 @@ static int __nocfi is_hw_lme_open(struct is_hw_ip *hw_ip, u32 instance)
 	frame_manager_probe(hw_ip->framemgr, hw_ip->id, "HWLME");
 	frame_manager_open(hw_ip->framemgr, IS_MAX_HW_FRAME);
 
-	hw_ip->priv_info = vzalloc(sizeof(struct is_hw_lme));
+	hw_ip->priv_info =  pablo_zalloc(sizeof(struct is_hw_lme), GFP_KERNEL);
 	if (!hw_ip->priv_info) {
 		mserr_hw("hw_ip->priv_info(null)", instance, hw_ip);
 		ret = -ENOMEM;
@@ -329,7 +329,7 @@ static int is_hw_lme_close(struct is_hw_ip *hw_ip, u32 instance)
 	CALL_BUFOP(hw_lme->pb_c_loader_payload, free, hw_lme->pb_c_loader_payload);
 	CALL_BUFOP(hw_lme->pb_c_loader_header, free, hw_lme->pb_c_loader_header);
 
-	vfree(hw_ip->priv_info);
+	pablo_free(hw_ip->priv_info);
 	hw_ip->priv_info = NULL;
 
 	frame_manager_close(hw_ip->framemgr);
@@ -1278,7 +1278,7 @@ int is_hw_lme_probe(struct is_hw_ip *hw_ip, struct is_interface *itf,
 
 	}
 
-	hw_ip->pmio_reg_seqs = vzalloc(sizeof(struct pmio_reg_seq) * lme_hw_g_reg_cnt());
+	hw_ip->pmio_reg_seqs =  pablo_zalloc(sizeof(struct pmio_reg_seq) * lme_hw_g_reg_cnt(), GFP_KERNEL);
 	if (!hw_ip->pmio_reg_seqs) {
 		err("failed to alloc PMIO multiple write buffer");
 		pmio_field_bulk_free(hw_ip->pmio, hw_ip->pmio_fields);

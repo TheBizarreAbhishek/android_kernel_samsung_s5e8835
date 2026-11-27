@@ -19,6 +19,7 @@
 #include "pablo-binary.h"
 #include "exynos-is-sensor.h"
 #include "is-common-config.h"
+#include "pablo-mem.h"
 
 /* the version storage of each library binary */
 typedef struct { char v[LIBRARY_VER_LEN + 1]; } lib_ver_t;
@@ -221,6 +222,16 @@ int put_filesystem_binary(const char *filename, struct is_binary *bin, u32 flags
 }
 EXPORT_SYMBOL_GPL(put_filesystem_binary);
 
+/* a wrapper both macro and function */
+static void *pablo_binary_malloc(unsigned long size)
+{
+	return pablo_malloc(size, GFP_KERNEL);
+}
+static void pablo_binary_free(const void *buf)
+{
+	return pablo_free(buf);
+}
+
 /*
  * setup_binary_loader: customize an instance of the binary loader
  * @bin: pointer to is_binary structure
@@ -242,8 +253,8 @@ void setup_binary_loader(struct is_binary *bin,
 		bin->free = free;
 	} else {
 		/* set vmalloc/vfree as a default */
-		bin->alloc = &vmalloc;
-		bin->free =  &vfree;
+		bin->alloc = &pablo_binary_malloc;
+		bin->free =  &pablo_binary_free;
 	}
 
 	bin->customized = (unsigned long)bin;

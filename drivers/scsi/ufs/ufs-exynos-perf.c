@@ -513,6 +513,8 @@ void ufs_perf_exit(void *data)
 	__sysfs_exit(perf);
 
 	if (perf && !IS_ERR(perf->handler)) {
+		kthread_stop(perf->handler);
+
 #if IS_ENABLED(CONFIG_EXYNOS_PM_QOS) || IS_ENABLED(CONFIG_EXYNOS_PM_QOS_MODULE)
 		exynos_pm_qos_remove_request(&perf->pm_qos_int);
 		exynos_pm_qos_remove_request(&perf->pm_qos_mif);
@@ -529,8 +531,6 @@ void ufs_perf_exit(void *data)
 		if (perf->num_clusters == 3)
 			freq_qos_remove_request(&perf->pm_qos_cluster2);
 #endif
-
-		kthread_stop(perf->handler);
 	}
 }
 MODULE_AUTHOR("Kiwoong Kim <kwmad.kim@samsung.com>");

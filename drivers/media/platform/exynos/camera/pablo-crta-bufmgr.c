@@ -291,7 +291,7 @@ static int pablo_crta_bufmgr_open(struct pablo_crta_bufmgr *crta_bufmgr, u32 ins
 	}
 
 	/* alloc priv */
-	bufmgr = vzalloc(sizeof(struct crta_bufmgr_v1));
+	bufmgr = pablo_zalloc(sizeof(struct crta_bufmgr_v1), GFP_KERNEL);
 	if (!bufmgr) {
 		merr_adt("failed to alloc crta_bufmgr_v1", instance);
 		return -ENOMEM;
@@ -314,7 +314,7 @@ static int pablo_crta_bufmgr_open(struct pablo_crta_bufmgr *crta_bufmgr, u32 ins
 err_attach_buf:
 	__pablo_crta_bufmgr_free_buf(bufmgr);
 err_alloc_buf:
-	vfree(crta_bufmgr->priv);
+	pablo_free(crta_bufmgr->priv);
 	crta_bufmgr->priv = NULL;
 	return ret;
 }
@@ -353,7 +353,7 @@ static int pablo_crta_bufmgr_close(struct pablo_crta_bufmgr *crta_bufmgr)
 
 	__pablo_crta_bufmgr_free_buf(bufmgr);
 
-	vfree(crta_bufmgr->priv);
+	pablo_free(crta_bufmgr->priv);
 	crta_bufmgr->priv = NULL;
 
 	return 0;

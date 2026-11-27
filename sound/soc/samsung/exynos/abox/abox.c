@@ -1063,6 +1063,17 @@ void abox_synchronize_power(void)
 }
 EXPORT_SYMBOL(abox_synchronize_power);
 
+void abox_request_power_autosuspend(struct device *dev, unsigned int id, const char *name)
+{
+	struct abox_data *data = dev_get_drvdata(dev);
+
+	abox_request_cpu_gear(dev, data, id, data->cpu_gear_min, name);
+
+	cancel_delayed_work(&data->usb_ipc_work);
+	schedule_delayed_work(&data->usb_ipc_work, HZ * 3); // 3 seconds
+}
+EXPORT_SYMBOL(abox_request_power_autosuspend);
+
 void abox_clear_cpu_gear_requests(struct device *dev)
 {
 	abox_qos_clear(dev, ABOX_QOS_AUD);
@@ -2012,6 +2023,17 @@ static void abox_boot_clear_work_func(struct work_struct *work)
 				0, "boot_clear");
 		boot_clear_count++;
 	}
+}
+
+static void abox_usb_ipc_work_func(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct abox_data *data = container_of(dwork, struct abox_data,
+			usb_ipc_work);
+	struct device *dev = data->dev;
+
+	abox_dbg(dev, "%s\n", __func__);
+	abox_request_cpu_gear(dev, data, 0x7008, 0, "USBOPEN");
 }
 
 static void abox_boot_done_work_func(struct work_struct *work)
@@ -4398,6 +4420,7 @@ static int samsung_abox_probe(struct platform_device *pdev)
 	INIT_WORK(&data->restore_data_work, abox_restore_data_work_func);
 	INIT_WORK(&data->boot_done_work, abox_boot_done_work_func);
 	INIT_DEFERRABLE_WORK(&data->boot_clear_work, abox_boot_clear_work_func);
+	INIT_DEFERRABLE_WORK(&data->usb_ipc_work, abox_usb_ipc_work_func);
 	INIT_DELAYED_WORK(&data->wdt_work, abox_wdt_work_func);
 	INIT_LIST_HEAD(&data->firmware_extra);
 	INIT_LIST_HEAD(&data->ipc_actions);

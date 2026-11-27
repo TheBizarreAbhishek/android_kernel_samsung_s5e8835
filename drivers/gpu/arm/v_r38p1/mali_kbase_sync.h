@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  *
- * (C) COPYRIGHT 2012-2016, 2018-2022 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2016, 2018-2026 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -30,6 +30,7 @@
 
 #include <linux/fdtable.h>
 #include <linux/syscalls.h>
+#include <linux/kthread.h>
 #if IS_ENABLED(CONFIG_SYNC)
 #include <sync.h>
 #endif
@@ -204,7 +205,7 @@ const char *kbase_sync_status_string(int status);
 /*
  * Internal worker used to continue processing of atom.
  */
-void kbase_sync_fence_wait_worker(struct work_struct *data);
+void kbase_sync_fence_wait_worker(struct kthread_work *data);
 
 #ifdef CONFIG_MALI_FENCE_DEBUG
 /**
