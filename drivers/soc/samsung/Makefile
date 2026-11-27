@@ -91,6 +91,3 @@ obj-$(CONFIG_EXYNOS_PERF)       += xperf/
 
 # Profiler Multi IP Governor
 obj-$(CONFIG_EXYNOS_PROFILER)         += profiler/
-
-# Temporary read-only SRAM FVMap inspector
-obj-$(CONFIG_SOC_S5E8835)	+= exynos_fvmap_dump.o
